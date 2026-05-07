@@ -15,6 +15,8 @@ export const Route = createFileRoute("/")({
 
 const ALLOWED_IP = "131.221.0.8";
 const STORAGE_KEY = "horasbiblio_user_name";
+const HEARTBEAT_MS = 30 * 60 * 1000; // 30 minutos
+const OFFLINE_GRACE_MS = 60 * 1000; // 1 minuto
 
 type Session = {
   id: string;
@@ -22,7 +24,30 @@ type Session = {
   start_time: string;
   end_time: string | null;
   total_minutes: number | null;
+  last_seen?: string | null;
 };
+
+async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
+  try {
+    const r = await fetch("https://api.ipify.org?format=json", { signal });
+    const d = await r.json();
+    return d.ip ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function closeSessionAt(sessionId: string, startTime: string, endIso: string) {
+  const minutes = Math.max(
+    1,
+    Math.round((new Date(endIso).getTime() - new Date(startTime).getTime()) / 60000)
+  );
+  await supabase
+    .from("sessions")
+    .update({ end_time: endIso, total_minutes: minutes, last_seen: endIso })
+    .eq("id", sessionId);
+  return minutes;
+}
 
 function formatDuration(ms: number) {
   const total = Math.floor(ms / 1000);
