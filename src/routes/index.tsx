@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -161,11 +160,6 @@ function Index() {
       />
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 text-center">
-          <img
-            src={logo}
-            alt="Horas biblio"
-            className="mx-auto mb-4 h-24 w-24 rounded-full object-cover shadow-[var(--shadow-glow)]"
-          />
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
             Horas <span className="text-primary">biblio</span>
           </h1>
