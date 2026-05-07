@@ -161,7 +161,7 @@ function Index() {
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-            horas <span className="text-primary">biblio</span>
+            Horas <span className="text-primary">biblio</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Registro de tiempo de conexión Wi-Fi
