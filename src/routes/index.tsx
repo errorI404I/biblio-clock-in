@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2 } from "lucide-react";
+import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { AdminPanel } from "@/components/AdminPanel";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -27,6 +28,8 @@ type Session = {
   last_seen?: string | null;
 };
 
+type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean };
+
 async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   try {
     const r = await fetch("https://api.ipify.org?format=json", { signal });
@@ -37,14 +40,32 @@ async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   }
 }
 
+async function getActiveMultiplier(): Promise<ActiveEvent> {
+  const { data } = await supabase
+    .from("settings")
+    .select("multiplier,event_name,active")
+    .eq("key", "multiplier")
+    .maybeSingle();
+  if (!data || !data.active) return { multiplier: 1, event_name: null, active: false };
+  return { multiplier: Number(data.multiplier) || 1, event_name: data.event_name, active: !!data.active };
+}
+
 async function closeSessionAt(sessionId: string, startTime: string, endIso: string) {
-  const minutes = Math.max(
+  const rawMinutes = Math.max(
     1,
     Math.round((new Date(endIso).getTime() - new Date(startTime).getTime()) / 60000)
   );
+  const ev = await getActiveMultiplier();
+  const minutes = Math.round(rawMinutes * ev.multiplier);
   await supabase
     .from("sessions")
-    .update({ end_time: endIso, total_minutes: minutes, last_seen: endIso })
+    .update({
+      end_time: endIso,
+      total_minutes: minutes,
+      last_seen: endIso,
+      multiplier: ev.multiplier,
+      event_name: ev.active ? ev.event_name : null,
+    })
     .eq("id", sessionId);
   return minutes;
 }
