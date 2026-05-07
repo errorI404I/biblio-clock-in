@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/")({
   component: Index,
