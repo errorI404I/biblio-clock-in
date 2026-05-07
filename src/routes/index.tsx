@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2 } from "lucide-react";
+import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { AdminPanel } from "@/components/AdminPanel";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -27,6 +28,8 @@ type Session = {
   last_seen?: string | null;
 };
 
+type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean };
+
 async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   try {
     const r = await fetch("https://api.ipify.org?format=json", { signal });
@@ -37,14 +40,32 @@ async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   }
 }
 
+async function getActiveMultiplier(): Promise<ActiveEvent> {
+  const { data } = await supabase
+    .from("settings")
+    .select("multiplier,event_name,active")
+    .eq("key", "multiplier")
+    .maybeSingle();
+  if (!data || !data.active) return { multiplier: 1, event_name: null, active: false };
+  return { multiplier: Number(data.multiplier) || 1, event_name: data.event_name, active: !!data.active };
+}
+
 async function closeSessionAt(sessionId: string, startTime: string, endIso: string) {
-  const minutes = Math.max(
+  const rawMinutes = Math.max(
     1,
     Math.round((new Date(endIso).getTime() - new Date(startTime).getTime()) / 60000)
   );
+  const ev = await getActiveMultiplier();
+  const minutes = Math.round(rawMinutes * ev.multiplier);
   await supabase
     .from("sessions")
-    .update({ end_time: endIso, total_minutes: minutes, last_seen: endIso })
+    .update({
+      end_time: endIso,
+      total_minutes: minutes,
+      last_seen: endIso,
+      multiplier: ev.multiplier,
+      event_name: ev.active ? ev.event_name : null,
+    })
     .eq("id", sessionId);
   return minutes;
 }
@@ -67,6 +88,29 @@ function Index() {
   const [leaders, setLeaders] = useState<{ user_name: string; minutes: number }[]>([]);
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false });
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hotkey Ctrl+Shift+A
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        setAdminOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Live event banner — poll every 15s
+  useEffect(() => {
+    const load = () => getActiveMultiplier().then(setActiveEvent);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const isAllowed = ip === ALLOWED_IP;
   const activeSessionRef = useRef<Session | null>(null);
@@ -289,22 +333,55 @@ function Index() {
     ? now - new Date(activeSession.start_time).getTime()
     : 0;
 
+  const startLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => setAdminOpen(true), 1500);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
+      <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
       <div
         className="absolute inset-0 -z-10 opacity-60"
         style={{ background: "var(--gradient-hero)" }}
       />
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+          <h1
+            className="text-4xl sm:text-5xl font-bold tracking-tight cursor-pointer select-none"
+            onPointerDown={startLongPress}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+          >
             Horas <span className="text-primary">biblio</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Registro de tiempo de conexión Wi-Fi
           </p>
         </header>
+
+        {activeEvent.active && activeEvent.multiplier > 1 && (
+          <div
+            className="mb-6 rounded-xl border border-primary/40 p-4 text-center animate-pulse"
+            style={{ background: "var(--gradient-hero)", boxShadow: "var(--shadow-glow)" }}
+          >
+            <div className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
+              <Sparkles className="h-4 w-4" /> ¡Evento activo!
+            </div>
+            <p className="mt-1 text-base font-semibold">
+              {activeEvent.event_name ?? "Evento especial"} — Las horas valen{" "}
+              <span className="text-primary">x{activeEvent.multiplier}</span> más
+            </p>
+          </div>
+        )}
 
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
