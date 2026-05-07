@@ -365,6 +365,24 @@ function Index() {
                   {new Date(activeSession.start_time).toLocaleTimeString()}
                 </div>
               )}
+              {activeSession && (
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full transition-all duration-500 ${
+                      verifiedFlash
+                        ? "bg-primary shadow-[0_0_12px_var(--color-primary)] scale-125"
+                        : "bg-primary/50"
+                    }`}
+                  />
+                  <span className="text-muted-foreground">
+                    {verifiedFlash
+                      ? "Conexión verificada"
+                      : lastVerified
+                        ? `Última verificación: ${new Date(lastVerified).toLocaleTimeString()}`
+                        : "Esperando verificación..."}
+                  </span>
+                </div>
+              )}
             </Card>
 
             <Card className="p-5 space-y-4">
