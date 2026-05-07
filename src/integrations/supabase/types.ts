@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           end_time: string | null
           id: string
+          last_seen: string
           start_time: string
           total_minutes: number | null
           user_name: string
@@ -27,6 +28,7 @@ export type Database = {
           created_at?: string
           end_time?: string | null
           id?: string
+          last_seen?: string
           start_time?: string
           total_minutes?: number | null
           user_name: string
@@ -35,6 +37,7 @@ export type Database = {
           created_at?: string
           end_time?: string | null
           id?: string
+          last_seen?: string
           start_time?: string
           total_minutes?: number | null
           user_name?: string
