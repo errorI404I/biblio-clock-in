@@ -88,6 +88,29 @@ function Index() {
   const [leaders, setLeaders] = useState<{ user_name: string; minutes: number }[]>([]);
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false });
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hotkey Ctrl+Shift+A
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        setAdminOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Live event banner — poll every 15s
+  useEffect(() => {
+    const load = () => getActiveMultiplier().then(setActiveEvent);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const isAllowed = ip === ALLOWED_IP;
   const activeSessionRef = useRef<Session | null>(null);
