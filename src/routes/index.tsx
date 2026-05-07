@@ -333,22 +333,55 @@ function Index() {
     ? now - new Date(activeSession.start_time).getTime()
     : 0;
 
+  const startLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => setAdminOpen(true), 1500);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
+      <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
       <div
         className="absolute inset-0 -z-10 opacity-60"
         style={{ background: "var(--gradient-hero)" }}
       />
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+          <h1
+            className="text-4xl sm:text-5xl font-bold tracking-tight cursor-pointer select-none"
+            onPointerDown={startLongPress}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+          >
             Horas <span className="text-primary">biblio</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Registro de tiempo de conexión Wi-Fi
           </p>
         </header>
+
+        {activeEvent.active && activeEvent.multiplier > 1 && (
+          <div
+            className="mb-6 rounded-xl border border-primary/40 p-4 text-center animate-pulse"
+            style={{ background: "var(--gradient-hero)", boxShadow: "var(--shadow-glow)" }}
+          >
+            <div className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
+              <Sparkles className="h-4 w-4" /> ¡Evento activo!
+            </div>
+            <p className="mt-1 text-base font-semibold">
+              {activeEvent.event_name ?? "Evento especial"} — Las horas valen{" "}
+              <span className="text-primary">x{activeEvent.multiplier}</span> más
+            </p>
+          </div>
+        )}
 
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
