@@ -75,11 +75,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Horas Biblio" },
       { name: "description", content: "Registro de tiempo de conexión Wi-Fi" },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Horas Biblio" },
+      { property: "og:description", content: "Registro de tiempo de conexión Wi-Fi" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Horas Biblio" },
+      { name: "twitter:description", content: "Registro de tiempo de conexión Wi-Fi" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c4a83969-1e08-4f8f-be32-5e891ce4e774/id-preview-9bdf5561--34c24eee-ca4a-408a-95ef-c0b8f7a13e0f.lovable.app-1778169920082.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c4a83969-1e08-4f8f-be32-5e891ce4e774/id-preview-9bdf5561--34c24eee-ca4a-408a-95ef-c0b8f7a13e0f.lovable.app-1778169920082.png" },
     ],
     links: [
       {
