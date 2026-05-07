@@ -18,8 +18,10 @@ export type Database = {
         Row: {
           created_at: string
           end_time: string | null
+          event_name: string | null
           id: string
           last_seen: string
+          multiplier: number
           start_time: string
           total_minutes: number | null
           user_name: string
@@ -27,8 +29,10 @@ export type Database = {
         Insert: {
           created_at?: string
           end_time?: string | null
+          event_name?: string | null
           id?: string
           last_seen?: string
+          multiplier?: number
           start_time?: string
           total_minutes?: number | null
           user_name: string
@@ -36,11 +40,40 @@ export type Database = {
         Update: {
           created_at?: string
           end_time?: string | null
+          event_name?: string | null
           id?: string
           last_seen?: string
+          multiplier?: number
           start_time?: string
           total_minutes?: number | null
           user_name?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          active: boolean
+          event_name: string | null
+          id: string
+          key: string
+          multiplier: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          event_name?: string | null
+          id?: string
+          key: string
+          multiplier?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          event_name?: string | null
+          id?: string
+          key?: string
+          multiplier?: number
+          updated_at?: string
         }
         Relationships: []
       }
