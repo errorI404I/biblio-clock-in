@@ -289,15 +289,19 @@ function Index() {
       if (cancelled) return;
 
       if (currentIp !== ALLOWED_IP) {
+        // Cerrar en el último chequeo válido — no se pierde lo acumulado, no se suma tiempo fuera de la red
+        const lastValidIso =
+          session.last_seen ??
+          new Date(lastVerified ?? new Date(session.start_time).getTime()).toISOString();
         const minutes = await closeSessionAt(
           session.id,
           session.start_time,
-          new Date().toISOString()
+          lastValidIso
         );
         setIp(currentIp);
         setActiveSession(null);
         toast.error("Sesión finalizada: Ya no te encuentras en la red autorizada", {
-          description: `Se registraron ${minutes} minutos.`,
+          description: `Se registraron ${minutes} minutos (hasta el último chequeo válido).`,
         });
         loadLeaders();
         return;
