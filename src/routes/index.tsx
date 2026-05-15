@@ -374,6 +374,28 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
+      {insult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 animate-in fade-in"
+          onClick={() => setInsult(null)}
+        >
+          <div className="max-w-xl rounded-2xl border-4 border-destructive bg-destructive/10 p-8 text-center animate-pulse">
+            <div className="text-6xl">👻🚫</div>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black uppercase tracking-tight text-destructive">
+              ¡Tramposo detectado!
+            </h2>
+            <p className="mt-4 text-lg sm:text-xl font-semibold">{insult}</p>
+            <Button
+              variant="destructive"
+              size="lg"
+              className="mt-6"
+              onClick={() => setInsult(null)}
+            >
+              Acepto mi vergüenza
+            </Button>
+          </div>
+        </div>
+      )}
       <div
         className="absolute inset-0 -z-10 opacity-60"
         style={{ background: "var(--gradient-hero)" }}
