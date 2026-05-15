@@ -195,13 +195,22 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
           </div>
         ) : (
           <Tabs defaultValue="live">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />En vivo</TabsTrigger>
               <TabsTrigger value="event"><Sparkles className="mr-1 h-4 w-4" />Evento</TabsTrigger>
+              <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Usuarios</TabsTrigger>
               <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Historial</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="live" className="mt-4">
+            <TabsContent value="live" className="mt-4 space-y-3">
+              <Button
+                onClick={nukeAll}
+                variant="destructive"
+                className="w-full font-bold uppercase tracking-wider"
+                size="lg"
+              >
+                <Zap className="mr-2 h-5 w-5" /> Desconectar a Todos
+              </Button>
               <Card className="p-4">
                 <h3 className="mb-3 text-sm font-semibold">Sesiones activas ({active.length})</h3>
                 {active.length === 0 ? (
