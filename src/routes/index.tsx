@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 const ALLOWED_IP = "131.221.0.8";
 const STORAGE_KEY = "horasbiblio_user_name";
-const HEARTBEAT_MS = 30 * 60 * 1000; // 30 minutos
+const HEARTBEAT_MS = 60 * 60 * 1000; // 1 hora (guardado progresivo)
 const OFFLINE_GRACE_MS = 60 * 1000; // 1 minuto
 
 type Session = {
@@ -90,6 +90,7 @@ function Index() {
   const [verifiedFlash, setVerifiedFlash] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false });
+  const [insult, setInsult] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hotkey Ctrl+Shift+A
@@ -224,6 +225,27 @@ function Index() {
   const handleCheckOut = async () => {
     if (!activeSession) return;
     setBusy(true);
+    // Validar IP antes de cerrar manualmente
+    const currentIp = await fetchPublicIp();
+    setIp(currentIp);
+    if (currentIp !== ALLOWED_IP) {
+      // Castigo: cerrar en el último chequeo válido (last_seen) — no se suman minutos fuera de la red
+      const lastValidIso =
+        activeSession.last_seen ??
+        new Date(lastVerified ?? new Date(activeSession.start_time).getTime()).toISOString();
+      const minutes = await closeSessionAt(
+        activeSession.id,
+        activeSession.start_time,
+        lastValidIso
+      );
+      setBusy(false);
+      setActiveSession(null);
+      setInsult(
+        `¡Sos un fantasma! ¿Qué intentás inventar horas desde tu casa? Tramposo de cuarta. Solo te quedan ${minutes} min (los del último chequeo válido en la red).`
+      );
+      loadLeaders();
+      return;
+    }
     const minutes = await closeSessionAt(
       activeSession.id,
       activeSession.start_time,
@@ -267,15 +289,19 @@ function Index() {
       if (cancelled) return;
 
       if (currentIp !== ALLOWED_IP) {
+        // Cerrar en el último chequeo válido — no se pierde lo acumulado, no se suma tiempo fuera de la red
+        const lastValidIso =
+          session.last_seen ??
+          new Date(lastVerified ?? new Date(session.start_time).getTime()).toISOString();
         const minutes = await closeSessionAt(
           session.id,
           session.start_time,
-          new Date().toISOString()
+          lastValidIso
         );
         setIp(currentIp);
         setActiveSession(null);
         toast.error("Sesión finalizada: Ya no te encuentras en la red autorizada", {
-          description: `Se registraron ${minutes} minutos.`,
+          description: `Se registraron ${minutes} minutos (hasta el último chequeo válido).`,
         });
         loadLeaders();
         return;
@@ -348,6 +374,28 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
+      {insult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 animate-in fade-in"
+          onClick={() => setInsult(null)}
+        >
+          <div className="max-w-xl rounded-2xl border-4 border-destructive bg-destructive/10 p-8 text-center animate-pulse">
+            <div className="text-6xl">👻🚫</div>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black uppercase tracking-tight text-destructive">
+              ¡Tramposo detectado!
+            </h2>
+            <p className="mt-4 text-lg sm:text-xl font-semibold">{insult}</p>
+            <Button
+              variant="destructive"
+              size="lg"
+              className="mt-6"
+              onClick={() => setInsult(null)}
+            >
+              Acepto mi vergüenza
+            </Button>
+          </div>
+        </div>
+      )}
       <div
         className="absolute inset-0 -z-10 opacity-60"
         style={{ background: "var(--gradient-hero)" }}
