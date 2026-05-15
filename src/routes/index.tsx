@@ -317,10 +317,26 @@ function Index() {
       setTimeout(() => setVerifiedFlash(false), 2500);
     };
 
-    const interval = setInterval(runHeartbeat, HEARTBEAT_MS);
+    // Reloj global: programar el próximo chequeo en la siguiente hora en punto (XX:00)
+    const msToNextHour = () => {
+      const n = new Date();
+      const next = new Date(n);
+      next.setHours(n.getHours() + 1, 0, 0, 0);
+      return next.getTime() - n.getTime();
+    };
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const timeout = setTimeout(() => {
+      if (cancelled) return;
+      runHeartbeat();
+      // Luego, cada hora exacta (3.600.000 ms)
+      interval = setInterval(runHeartbeat, 60 * 60 * 1000);
+    }, msToNextHour());
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
     };
   }, [activeSession, loadLeaders, lastVerified]);
 
@@ -508,6 +524,22 @@ function Index() {
                   </span>
                 </div>
               )}
+              {activeSession && (() => {
+                const nextHour = new Date(now);
+                nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+                const ms = nextHour.getTime() - now;
+                const m = Math.floor(ms / 60000);
+                const s = Math.floor((ms % 60000) / 1000);
+                return (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Próximo control automático en{" "}
+                    <span className="font-mono tabular-nums text-primary">
+                      {String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
+                    </span>{" "}
+                    ({nextHour.getHours().toString().padStart(2, "0")}:00)
+                  </div>
+                );
+              })()}
             </Card>
 
             <Card className="p-5 space-y-4">
