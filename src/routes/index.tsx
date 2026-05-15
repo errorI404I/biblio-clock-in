@@ -317,10 +317,26 @@ function Index() {
       setTimeout(() => setVerifiedFlash(false), 2500);
     };
 
-    const interval = setInterval(runHeartbeat, HEARTBEAT_MS);
+    // Reloj global: programar el próximo chequeo en la siguiente hora en punto (XX:00)
+    const msToNextHour = () => {
+      const n = new Date();
+      const next = new Date(n);
+      next.setHours(n.getHours() + 1, 0, 0, 0);
+      return next.getTime() - n.getTime();
+    };
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const timeout = setTimeout(() => {
+      if (cancelled) return;
+      runHeartbeat();
+      // Luego, cada hora exacta (3.600.000 ms)
+      interval = setInterval(runHeartbeat, 60 * 60 * 1000);
+    }, msToNextHour());
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
     };
   }, [activeSession, loadLeaders, lastVerified]);
 
