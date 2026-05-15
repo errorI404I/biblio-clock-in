@@ -225,6 +225,27 @@ function Index() {
   const handleCheckOut = async () => {
     if (!activeSession) return;
     setBusy(true);
+    // Validar IP antes de cerrar manualmente
+    const currentIp = await fetchPublicIp();
+    setIp(currentIp);
+    if (currentIp !== ALLOWED_IP) {
+      // Castigo: cerrar en el último chequeo válido (last_seen) — no se suman minutos fuera de la red
+      const lastValidIso =
+        activeSession.last_seen ??
+        new Date(lastVerified ?? new Date(activeSession.start_time).getTime()).toISOString();
+      const minutes = await closeSessionAt(
+        activeSession.id,
+        activeSession.start_time,
+        lastValidIso
+      );
+      setBusy(false);
+      setActiveSession(null);
+      setInsult(
+        `¡Sos un fantasma! ¿Qué intentás inventar horas desde tu casa? Tramposo de cuarta. Solo te quedan ${minutes} min (los del último chequeo válido en la red).`
+      );
+      loadLeaders();
+      return;
+    }
     const minutes = await closeSessionAt(
       activeSession.id,
       activeSession.start_time,
