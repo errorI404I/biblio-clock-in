@@ -280,6 +280,29 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
               </Card>
             </TabsContent>
 
+            <TabsContent value="users" className="mt-4">
+              <Card className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Usuarios ({allUsers.length})</h3>
+                {allUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin usuarios.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {allUsers.map((name) => (
+                      <li key={name} className="flex items-center justify-between gap-2 py-2 text-sm">
+                        <span className="truncate font-medium">{name}</span>
+                        <Button size="sm" variant="outline" onClick={() => renameUser(name)}>
+                          <Pencil className="mr-1 h-3 w-3" /> Renombrar
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Renombra todas las sesiones del usuario; se refleja en el ranking global.
+                </p>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="history" className="mt-4">
               <Card className="p-4">
                 <h3 className="mb-3 text-sm font-semibold">Últimas sesiones ({history.length})</h3>
