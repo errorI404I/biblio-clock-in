@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 const ALLOWED_IP = "131.221.0.8";
 const STORAGE_KEY = "horasbiblio_user_name";
-const HEARTBEAT_MS = 30 * 60 * 1000; // 30 minutos
+const HEARTBEAT_MS = 60 * 60 * 1000; // 1 hora (guardado progresivo)
 const OFFLINE_GRACE_MS = 60 * 1000; // 1 minuto
 
 type Session = {
