@@ -112,6 +112,66 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     loadAll();
   };
 
+  const nukeAll = async () => {
+    if (!confirm("¿Estás seguro de que querés patear a todos?")) return;
+    const { data: sessions } = await supabase
+      .from("sessions")
+      .select("*")
+      .is("end_time", null);
+    if (!sessions || sessions.length === 0) {
+      toast.message("No hay sesiones activas.");
+      return;
+    }
+    const { data: s } = await supabase
+      .from("settings")
+      .select("multiplier,event_name,active")
+      .eq("key", "multiplier")
+      .maybeSingle();
+    const mult = s?.active ? Number(s.multiplier) || 1 : 1;
+    const evName = s?.active ? s.event_name : null;
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    let count = 0;
+    for (const sess of sessions) {
+      const raw = Math.max(1, Math.round((nowMs - new Date(sess.start_time).getTime()) / 60000));
+      const minutes = Math.round(raw * mult);
+      const { error } = await supabase
+        .from("sessions")
+        .update({
+          end_time: nowIso,
+          total_minutes: minutes,
+          last_seen: nowIso,
+          multiplier: mult,
+          event_name: evName,
+        })
+        .eq("id", sess.id);
+      if (!error) count++;
+    }
+    toast.success(`💥 ${count} sesiones cerradas y guardadas.`);
+    loadAll();
+  };
+
+  const renameUser = async (oldName: string) => {
+    const v = prompt(`Renombrar a "${oldName}":`, oldName);
+    if (v == null) return;
+    const newName = v.trim();
+    if (!newName || newName === oldName) return;
+    const { error } = await supabase
+      .from("sessions")
+      .update({ user_name: newName })
+      .eq("user_name", oldName);
+    if (error) return toast.error("Error al renombrar");
+    toast.success(`Renombrado: ${oldName} → ${newName}`);
+    loadAll();
+  };
+
+  // Lista única de usuarios desde el historial + activos
+  const allUsers = Array.from(
+    new Map(
+      [...active, ...history].map((s) => [s.user_name, s.user_name])
+    ).keys()
+  ).sort();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
