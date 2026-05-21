@@ -143,15 +143,22 @@ function Index() {
   const loadLeaders = useCallback(async () => {
     const { data } = await supabase
       .from("sessions")
-      .select("user_name,total_minutes")
-      .not("total_minutes", "is", null);
+      .select("user_name,total_minutes,end_time");
     if (!data) return;
-    const map = new Map<string, number>();
+    const minutesMap = new Map<string, number>();
+    const onlineSet = new Set<string>();
     for (const r of data) {
-      map.set(r.user_name, (map.get(r.user_name) ?? 0) + (r.total_minutes ?? 0));
+      if (r.total_minutes != null) {
+        minutesMap.set(r.user_name, (minutesMap.get(r.user_name) ?? 0) + (r.total_minutes ?? 0));
+      }
+      if (r.end_time === null) onlineSet.add(r.user_name);
     }
-    const arr = Array.from(map, ([user_name, minutes]) => ({ user_name, minutes }))
-      .sort((a, b) => b.minutes - a.minutes);
+    const names = new Set<string>([...minutesMap.keys(), ...onlineSet]);
+    const arr = Array.from(names, (user_name) => ({
+      user_name,
+      minutes: minutesMap.get(user_name) ?? 0,
+      online: onlineSet.has(user_name),
+    })).sort((a, b) => b.minutes - a.minutes);
     setLeaders(arr);
   }, []);
 
