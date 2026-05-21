@@ -683,7 +683,6 @@ function Index() {
                   </ul>
                 );
               })()}
-              )}
             </Card>
           </TabsContent>
         </Tabs>
