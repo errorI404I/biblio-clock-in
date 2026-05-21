@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users } from "lucide-react";
 
-const ADMIN_PASS = "admin123";
+const ADMIN_PASS = "54321";
 
 type Session = {
   id: string;
