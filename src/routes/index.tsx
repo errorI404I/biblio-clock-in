@@ -612,42 +612,77 @@ function Index() {
 
           <TabsContent value="leaders" className="mt-6">
             <Card className="p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                <Trophy className="h-5 w-5 text-primary" /> Ranking
-              </h2>
-              {leaders.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Aún no hay registros completados.
-                </p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {leaders.map((l, i) => {
-                    const h = Math.floor(l.minutes / 60);
-                    const m = l.minutes % 60;
-                    return (
-                      <li
-                        key={l.user_name}
-                        className="flex items-center justify-between py-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                              i === 0
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {i + 1}
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <Trophy className="h-5 w-5 text-primary" /> Ranking
+                </h2>
+                <Button
+                  type="button"
+                  variant={onlyOnline ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOnlyOnline((v) => !v)}
+                  className="text-xs"
+                >
+                  <span className="relative mr-2 flex h-2 w-2">
+                    {onlyOnline && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                    )}
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
+                  {onlyOnline ? "Solo conectados" : "Ver todos"}
+                </Button>
+              </div>
+              {(() => {
+                const visible = onlyOnline ? leaders.filter((l) => l.online) : leaders;
+                if (visible.length === 0) {
+                  return (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      {onlyOnline ? "Nadie conectado ahora." : "Aún no hay registros completados."}
+                    </p>
+                  );
+                }
+                return (
+                  <ul className="divide-y divide-border">
+                    {visible.map((l, i) => {
+                      const h = Math.floor(l.minutes / 60);
+                      const m = l.minutes % 60;
+                      return (
+                        <li
+                          key={l.user_name}
+                          className="flex items-center justify-between py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                                i === 0
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="font-medium">{l.user_name}</span>
+                            {l.online ? (
+                              <span className="relative flex h-3 w-3" title="Conectado ahora">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.9)]" />
+                              </span>
+                            ) : (
+                              <span
+                                className="h-3 w-3 rounded-full bg-muted-foreground/40"
+                                title="Desconectado"
+                              />
+                            )}
+                          </div>
+                          <span className="font-mono tabular-nums text-sm">
+                            {h}h {String(m).padStart(2, "0")}m
                           </span>
-                          <span className="font-medium">{l.user_name}</span>
-                        </div>
-                        <span className="font-mono tabular-nums text-sm">
-                          {h}h {String(m).padStart(2, "0")}m
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
               )}
             </Card>
           </TabsContent>
