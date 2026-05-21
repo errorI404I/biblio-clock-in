@@ -205,6 +205,21 @@ function Index() {
     loadLeaders();
   }, [loadLeaders]);
 
+  // Realtime: refrescar ranking cuando cambien sesiones
+  useEffect(() => {
+    const channel = supabase
+      .channel("sessions-leaderboard")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sessions" },
+        () => loadLeaders()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadLeaders]);
+
   const handleCheckIn = async () => {
     const name = userName.trim();
     if (!name) {
