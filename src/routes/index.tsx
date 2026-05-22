@@ -414,6 +414,7 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
+      <BroadcastImageModal />
       {insult && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 animate-in fade-in"
