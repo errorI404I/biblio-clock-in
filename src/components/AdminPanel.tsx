@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users } from "lucide-react";
+import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users, LogOut, Clock, Megaphone, Image as ImageIcon, Trophy } from "lucide-react";
 
 const ADMIN_PASS = "54321";
 
@@ -40,6 +40,12 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [eventName, setEventName] = useState("");
   const [multiplier, setMultiplier] = useState(2);
   const [eventActive, setEventActive] = useState(false);
+  // Broadcast
+  const [bcastMsg, setBcastMsg] = useState("");
+  const [bcastMins, setBcastMins] = useState(10);
+  const [bcastImg, setBcastImg] = useState("");
+  const [bcastImgMins, setBcastImgMins] = useState(15);
+  const [bcasts, setBcasts] = useState<any[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -49,10 +55,11 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   }, [open]);
 
   const loadAll = async () => {
-    const [{ data: act }, { data: hist }, { data: s }] = await Promise.all([
+    const [{ data: act }, { data: hist }, { data: s }, { data: bc }] = await Promise.all([
       supabase.from("sessions").select("*").is("end_time", null).order("start_time", { ascending: false }),
       supabase.from("sessions").select("*").not("end_time", "is", null).order("start_time", { ascending: false }).limit(100),
       supabase.from("settings").select("*").eq("key", "multiplier").maybeSingle(),
+      (supabase as any).from("broadcasts").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
     setActive((act ?? []) as Session[]);
     setHistory((hist ?? []) as Session[]);
@@ -62,6 +69,7 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
       setEventName(s.event_name ?? "");
       setEventActive(!!s.active);
     }
+    setBcasts(bc ?? []);
   };
 
   useEffect(() => {
@@ -165,12 +173,111 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     loadAll();
   };
 
+  // Kick individual user - close their active session now
+  const kickUser = async (s: Session) => {
+    if (!confirm(`¿Desconectar a ${s.user_name}?`)) return;
+    const { data: setting } = await supabase
+      .from("settings")
+      .select("multiplier,event_name,active")
+      .eq("key", "multiplier")
+      .maybeSingle();
+    const mult = setting?.active ? Number(setting.multiplier) || 1 : 1;
+    const evName = setting?.active ? setting.event_name : null;
+    const nowIso = new Date().toISOString();
+    const raw = Math.max(1, Math.round((Date.now() - new Date(s.start_time).getTime()) / 60000));
+    const minutes = Math.round(raw * mult);
+    const { error } = await supabase
+      .from("sessions")
+      .update({
+        end_time: nowIso,
+        total_minutes: minutes,
+        last_seen: nowIso,
+        multiplier: mult,
+        event_name: evName,
+      })
+      .eq("id", s.id);
+    if (error) return toast.error("Error al desconectar");
+    toast.success(`👢 ${s.user_name} desconectado · ${minutes} min`);
+    loadAll();
+  };
+
+  // Adjust user total (insert a synthetic adjustment row, +/- minutes)
+  const adjustUserTime = async (name: string) => {
+    const v = prompt(`Ajustar minutos para "${name}" (+sumar / -restar):`, "0");
+    if (v == null) return;
+    const delta = parseInt(v, 10);
+    if (Number.isNaN(delta) || delta === 0) return toast.error("Valor inválido");
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase.from("sessions").insert({
+      user_name: name,
+      start_time: nowIso,
+      end_time: nowIso,
+      total_minutes: delta,
+      last_seen: nowIso,
+      multiplier: 1,
+      event_name: delta >= 0 ? "Ajuste admin (+)" : "Penalización admin (−)",
+    });
+    if (error) return toast.error("Error al ajustar");
+    toast.success(`⏱ ${name}: ${delta > 0 ? "+" : ""}${delta} min`);
+    loadAll();
+  };
+
+  // Send text broadcast
+  const sendTextBroadcast = async () => {
+    const msg = bcastMsg.trim();
+    if (!msg) return toast.error("Escribe un mensaje");
+    if (bcastMins <= 0) return toast.error("Duración inválida");
+    const expires = new Date(Date.now() + bcastMins * 60 * 1000).toISOString();
+    const { error } = await (supabase as any).from("broadcasts").insert({
+      type: "text",
+      message: msg,
+      expires_at: expires,
+    });
+    if (error) return toast.error("Error al enviar");
+    toast.success(`📢 Mensaje enviado por ${bcastMins} min`);
+    setBcastMsg("");
+    loadAll();
+  };
+
+  // Send image broadcast
+  const sendImageBroadcast = async () => {
+    const url = bcastImg.trim();
+    if (!url) return toast.error("Pega una URL de imagen");
+    if (bcastImgMins <= 0) return toast.error("Duración inválida");
+    const expires = new Date(Date.now() + bcastImgMins * 60 * 1000).toISOString();
+    const { error } = await (supabase as any).from("broadcasts").insert({
+      type: "image",
+      image_url: url,
+      expires_at: expires,
+    });
+    if (error) return toast.error("Error al enviar");
+    toast.success(`🖼 Pop-up enviado por ${bcastImgMins} min`);
+    setBcastImg("");
+    loadAll();
+  };
+
+  const deleteBroadcast = async (id: string) => {
+    const { error } = await (supabase as any).from("broadcasts").delete().eq("id", id);
+    if (error) return toast.error("Error");
+    toast.success("Eliminado");
+    loadAll();
+  };
+
   // Lista única de usuarios desde el historial + activos
   const allUsers = Array.from(
     new Map(
       [...active, ...history].map((s) => [s.user_name, s.user_name])
     ).keys()
   ).sort();
+
+  // Ranking calculado (suma de minutos por usuario)
+  const ranking = (() => {
+    const map = new Map<string, number>();
+    for (const s of [...active, ...history]) {
+      if (s.total_minutes != null) map.set(s.user_name, (map.get(s.user_name) ?? 0) + (s.total_minutes ?? 0));
+    }
+    return Array.from(map, ([user_name, minutes]) => ({ user_name, minutes })).sort((a, b) => b.minutes - a.minutes);
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,11 +302,13 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
           </div>
         ) : (
           <Tabs defaultValue="live">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />En vivo</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />Vivo</TabsTrigger>
+              <TabsTrigger value="ranking"><Trophy className="mr-1 h-4 w-4" />Ranking</TabsTrigger>
+              <TabsTrigger value="broadcast"><Megaphone className="mr-1 h-4 w-4" />Broadcast</TabsTrigger>
               <TabsTrigger value="event"><Sparkles className="mr-1 h-4 w-4" />Evento</TabsTrigger>
-              <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Usuarios</TabsTrigger>
-              <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Historial</TabsTrigger>
+              <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Users</TabsTrigger>
+              <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Hist.</TabsTrigger>
             </TabsList>
 
             <TabsContent value="live" className="mt-4 space-y-3">
@@ -220,14 +329,17 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     {active.map((s) => {
                       const mins = Math.floor((Date.now() - new Date(s.start_time).getTime()) / 60000);
                       return (
-                        <li key={s.id} className="flex items-center justify-between py-2 text-sm">
-                          <div>
-                            <div className="font-medium">{s.user_name}</div>
+                        <li key={s.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{s.user_name}</div>
                             <div className="text-xs text-muted-foreground">
                               Inicio: {new Date(s.start_time).toLocaleTimeString()} · {mins} min
                             </div>
                           </div>
                           <span className="h-2 w-2 rounded-full bg-primary" />
+                          <Button size="sm" variant="destructive" onClick={() => kickUser(s)} className="h-7 px-2 text-xs">
+                            <LogOut className="mr-1 h-3 w-3" /> Kick
+                          </Button>
                         </li>
                       );
                     })}
@@ -235,6 +347,125 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                 )}
               </Card>
             </TabsContent>
+
+            <TabsContent value="ranking" className="mt-4">
+              <Card className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Ranking · Ajuste manual ({ranking.length})</h3>
+                {ranking.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin datos.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {ranking.map((r, i) => {
+                      const h = Math.floor(r.minutes / 60);
+                      const m = r.minutes % 60;
+                      return (
+                        <li key={r.user_name} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-5">{i + 1}</span>
+                            <span className="truncate font-medium">{r.user_name}</span>
+                          </div>
+                          <span className="font-mono tabular-nums text-xs text-muted-foreground">
+                            {h}h {String(m).padStart(2, "0")}m
+                          </span>
+                          <Button size="sm" variant="outline" onClick={() => adjustUserTime(r.user_name)} className="h-7 px-2 text-xs">
+                            <Clock className="mr-1 h-3 w-3" /> Ajustar
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Ingresa valor positivo (bono) o negativo (penalización) en minutos.
+                </p>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="broadcast" className="mt-4 space-y-4">
+              <Card className="p-4 space-y-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <Megaphone className="h-4 w-4" /> Mensaje de texto (banner)
+                </h3>
+                <Input
+                  placeholder="Ej: ¡Cierra a las 22:00! Apuren."
+                  value={bcastMsg}
+                  onChange={(e) => setBcastMsg(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Duración (min)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24"
+                    value={bcastMins}
+                    onChange={(e) => setBcastMins(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <Button onClick={sendTextBroadcast} className="ml-auto">
+                    <Megaphone className="mr-2 h-4 w-4" /> Enviar
+                  </Button>
+                </div>
+              </Card>
+
+              <Card className="p-4 space-y-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <ImageIcon className="h-4 w-4" /> Pop-up de imagen
+                </h3>
+                <Input
+                  placeholder="URL de la imagen (https://...)"
+                  value={bcastImg}
+                  onChange={(e) => setBcastImg(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Duración (min)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24"
+                    value={bcastImgMins}
+                    onChange={(e) => setBcastImgMins(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <Button onClick={sendImageBroadcast} className="ml-auto">
+                    <ImageIcon className="mr-2 h-4 w-4" /> Enviar
+                  </Button>
+                </div>
+                {bcastImg && (
+                  <img src={bcastImg} alt="preview" className="max-h-32 rounded-md border object-contain" />
+                )}
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Broadcasts ({bcasts.length})</h3>
+                {bcasts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin envíos.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {bcasts.map((b) => {
+                      const exp = new Date(b.expires_at).getTime();
+                      const active = exp > Date.now();
+                      return (
+                        <li key={b.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1 text-xs">
+                              {b.type === "image" ? <ImageIcon className="h-3 w-3" /> : <Megaphone className="h-3 w-3" />}
+                              <span className={active ? "font-bold text-primary" : "text-muted-foreground"}>
+                                {active ? "Activo" : "Expirado"}
+                              </span>
+                              <span className="text-muted-foreground">· vence {new Date(b.expires_at).toLocaleTimeString()}</span>
+                            </div>
+                            <div className="truncate text-xs">{b.message ?? b.image_url}</div>
+                          </div>
+                          <Button size="sm" variant="destructive" onClick={() => deleteBroadcast(b.id)} className="h-7 px-2">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Card>
+            </TabsContent>
+
+
 
             <TabsContent value="event" className="mt-4 space-y-4">
               <Card className="p-4 space-y-3">

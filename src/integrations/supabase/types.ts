@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      broadcasts: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          image_url: string | null
+          message: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          image_url?: string | null
+          message?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       sessions: {
         Row: {
           created_at: string

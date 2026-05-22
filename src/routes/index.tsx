@@ -9,6 +9,7 @@ import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles } from "lucide-
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { AdminPanel } from "@/components/AdminPanel";
+import { BroadcastBanner, BroadcastImageModal } from "@/components/BroadcastDisplay";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -413,6 +414,7 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground">
       <Toaster theme="dark" position="top-center" />
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} />
+      <BroadcastImageModal />
       {insult && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 animate-in fade-in"
@@ -611,6 +613,7 @@ function Index() {
           </TabsContent>
 
           <TabsContent value="leaders" className="mt-6">
+            <BroadcastBanner />
             <Card className="p-5">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
