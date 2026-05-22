@@ -9,6 +9,7 @@ import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles } from "lucide-
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { AdminPanel } from "@/components/AdminPanel";
+import { BroadcastBanner, BroadcastImageModal } from "@/components/BroadcastDisplay";
 
 export const Route = createFileRoute("/")({
   component: Index,
