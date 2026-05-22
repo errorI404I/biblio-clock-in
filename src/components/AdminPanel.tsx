@@ -173,12 +173,111 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     loadAll();
   };
 
+  // Kick individual user - close their active session now
+  const kickUser = async (s: Session) => {
+    if (!confirm(`¿Desconectar a ${s.user_name}?`)) return;
+    const { data: setting } = await supabase
+      .from("settings")
+      .select("multiplier,event_name,active")
+      .eq("key", "multiplier")
+      .maybeSingle();
+    const mult = setting?.active ? Number(setting.multiplier) || 1 : 1;
+    const evName = setting?.active ? setting.event_name : null;
+    const nowIso = new Date().toISOString();
+    const raw = Math.max(1, Math.round((Date.now() - new Date(s.start_time).getTime()) / 60000));
+    const minutes = Math.round(raw * mult);
+    const { error } = await supabase
+      .from("sessions")
+      .update({
+        end_time: nowIso,
+        total_minutes: minutes,
+        last_seen: nowIso,
+        multiplier: mult,
+        event_name: evName,
+      })
+      .eq("id", s.id);
+    if (error) return toast.error("Error al desconectar");
+    toast.success(`👢 ${s.user_name} desconectado · ${minutes} min`);
+    loadAll();
+  };
+
+  // Adjust user total (insert a synthetic adjustment row, +/- minutes)
+  const adjustUserTime = async (name: string) => {
+    const v = prompt(`Ajustar minutos para "${name}" (+sumar / -restar):`, "0");
+    if (v == null) return;
+    const delta = parseInt(v, 10);
+    if (Number.isNaN(delta) || delta === 0) return toast.error("Valor inválido");
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase.from("sessions").insert({
+      user_name: name,
+      start_time: nowIso,
+      end_time: nowIso,
+      total_minutes: delta,
+      last_seen: nowIso,
+      multiplier: 1,
+      event_name: delta >= 0 ? "Ajuste admin (+)" : "Penalización admin (−)",
+    });
+    if (error) return toast.error("Error al ajustar");
+    toast.success(`⏱ ${name}: ${delta > 0 ? "+" : ""}${delta} min`);
+    loadAll();
+  };
+
+  // Send text broadcast
+  const sendTextBroadcast = async () => {
+    const msg = bcastMsg.trim();
+    if (!msg) return toast.error("Escribe un mensaje");
+    if (bcastMins <= 0) return toast.error("Duración inválida");
+    const expires = new Date(Date.now() + bcastMins * 60 * 1000).toISOString();
+    const { error } = await (supabase as any).from("broadcasts").insert({
+      type: "text",
+      message: msg,
+      expires_at: expires,
+    });
+    if (error) return toast.error("Error al enviar");
+    toast.success(`📢 Mensaje enviado por ${bcastMins} min`);
+    setBcastMsg("");
+    loadAll();
+  };
+
+  // Send image broadcast
+  const sendImageBroadcast = async () => {
+    const url = bcastImg.trim();
+    if (!url) return toast.error("Pega una URL de imagen");
+    if (bcastImgMins <= 0) return toast.error("Duración inválida");
+    const expires = new Date(Date.now() + bcastImgMins * 60 * 1000).toISOString();
+    const { error } = await (supabase as any).from("broadcasts").insert({
+      type: "image",
+      image_url: url,
+      expires_at: expires,
+    });
+    if (error) return toast.error("Error al enviar");
+    toast.success(`🖼 Pop-up enviado por ${bcastImgMins} min`);
+    setBcastImg("");
+    loadAll();
+  };
+
+  const deleteBroadcast = async (id: string) => {
+    const { error } = await (supabase as any).from("broadcasts").delete().eq("id", id);
+    if (error) return toast.error("Error");
+    toast.success("Eliminado");
+    loadAll();
+  };
+
   // Lista única de usuarios desde el historial + activos
   const allUsers = Array.from(
     new Map(
       [...active, ...history].map((s) => [s.user_name, s.user_name])
     ).keys()
   ).sort();
+
+  // Ranking calculado (suma de minutos por usuario)
+  const ranking = (() => {
+    const map = new Map<string, number>();
+    for (const s of [...active, ...history]) {
+      if (s.total_minutes != null) map.set(s.user_name, (map.get(s.user_name) ?? 0) + (s.total_minutes ?? 0));
+    }
+    return Array.from(map, ([user_name, minutes]) => ({ user_name, minutes })).sort((a, b) => b.minutes - a.minutes);
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
