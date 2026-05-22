@@ -55,10 +55,11 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   }, [open]);
 
   const loadAll = async () => {
-    const [{ data: act }, { data: hist }, { data: s }] = await Promise.all([
+    const [{ data: act }, { data: hist }, { data: s }, { data: bc }] = await Promise.all([
       supabase.from("sessions").select("*").is("end_time", null).order("start_time", { ascending: false }),
       supabase.from("sessions").select("*").not("end_time", "is", null).order("start_time", { ascending: false }).limit(100),
       supabase.from("settings").select("*").eq("key", "multiplier").maybeSingle(),
+      (supabase as any).from("broadcasts").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
     setActive((act ?? []) as Session[]);
     setHistory((hist ?? []) as Session[]);
@@ -68,6 +69,7 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
       setEventName(s.event_name ?? "");
       setEventActive(!!s.active);
     }
+    setBcasts(bc ?? []);
   };
 
   useEffect(() => {
