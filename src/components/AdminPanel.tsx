@@ -348,6 +348,125 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
               </Card>
             </TabsContent>
 
+            <TabsContent value="ranking" className="mt-4">
+              <Card className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Ranking · Ajuste manual ({ranking.length})</h3>
+                {ranking.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin datos.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {ranking.map((r, i) => {
+                      const h = Math.floor(r.minutes / 60);
+                      const m = r.minutes % 60;
+                      return (
+                        <li key={r.user_name} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-5">{i + 1}</span>
+                            <span className="truncate font-medium">{r.user_name}</span>
+                          </div>
+                          <span className="font-mono tabular-nums text-xs text-muted-foreground">
+                            {h}h {String(m).padStart(2, "0")}m
+                          </span>
+                          <Button size="sm" variant="outline" onClick={() => adjustUserTime(r.user_name)} className="h-7 px-2 text-xs">
+                            <Clock className="mr-1 h-3 w-3" /> Ajustar
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Ingresa valor positivo (bono) o negativo (penalización) en minutos.
+                </p>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="broadcast" className="mt-4 space-y-4">
+              <Card className="p-4 space-y-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <Megaphone className="h-4 w-4" /> Mensaje de texto (banner)
+                </h3>
+                <Input
+                  placeholder="Ej: ¡Cierra a las 22:00! Apuren."
+                  value={bcastMsg}
+                  onChange={(e) => setBcastMsg(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Duración (min)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24"
+                    value={bcastMins}
+                    onChange={(e) => setBcastMins(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <Button onClick={sendTextBroadcast} className="ml-auto">
+                    <Megaphone className="mr-2 h-4 w-4" /> Enviar
+                  </Button>
+                </div>
+              </Card>
+
+              <Card className="p-4 space-y-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <ImageIcon className="h-4 w-4" /> Pop-up de imagen
+                </h3>
+                <Input
+                  placeholder="URL de la imagen (https://...)"
+                  value={bcastImg}
+                  onChange={(e) => setBcastImg(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Duración (min)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24"
+                    value={bcastImgMins}
+                    onChange={(e) => setBcastImgMins(parseInt(e.target.value, 10) || 1)}
+                  />
+                  <Button onClick={sendImageBroadcast} className="ml-auto">
+                    <ImageIcon className="mr-2 h-4 w-4" /> Enviar
+                  </Button>
+                </div>
+                {bcastImg && (
+                  <img src={bcastImg} alt="preview" className="max-h-32 rounded-md border object-contain" />
+                )}
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Broadcasts ({bcasts.length})</h3>
+                {bcasts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin envíos.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {bcasts.map((b) => {
+                      const exp = new Date(b.expires_at).getTime();
+                      const active = exp > Date.now();
+                      return (
+                        <li key={b.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1 text-xs">
+                              {b.type === "image" ? <ImageIcon className="h-3 w-3" /> : <Megaphone className="h-3 w-3" />}
+                              <span className={active ? "font-bold text-primary" : "text-muted-foreground"}>
+                                {active ? "Activo" : "Expirado"}
+                              </span>
+                              <span className="text-muted-foreground">· vence {new Date(b.expires_at).toLocaleTimeString()}</span>
+                            </div>
+                            <div className="truncate text-xs">{b.message ?? b.image_url}</div>
+                          </div>
+                          <Button size="sm" variant="destructive" onClick={() => deleteBroadcast(b.id)} className="h-7 px-2">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Card>
+            </TabsContent>
+
+
+
             <TabsContent value="event" className="mt-4 space-y-4">
               <Card className="p-4 space-y-3">
                 <div>
