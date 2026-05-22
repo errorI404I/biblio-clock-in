@@ -612,6 +612,7 @@ function Index() {
           </TabsContent>
 
           <TabsContent value="leaders" className="mt-6">
+            <BroadcastBanner />
             <Card className="p-5">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
