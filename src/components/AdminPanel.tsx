@@ -40,6 +40,12 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [eventName, setEventName] = useState("");
   const [multiplier, setMultiplier] = useState(2);
   const [eventActive, setEventActive] = useState(false);
+  // Broadcast
+  const [bcastMsg, setBcastMsg] = useState("");
+  const [bcastMins, setBcastMins] = useState(10);
+  const [bcastImg, setBcastImg] = useState("");
+  const [bcastImgMins, setBcastImgMins] = useState(15);
+  const [bcasts, setBcasts] = useState<any[]>([]);
 
   useEffect(() => {
     if (!open) {
