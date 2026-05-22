@@ -302,11 +302,13 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
           </div>
         ) : (
           <Tabs defaultValue="live">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />En vivo</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />Vivo</TabsTrigger>
+              <TabsTrigger value="ranking"><Trophy className="mr-1 h-4 w-4" />Ranking</TabsTrigger>
+              <TabsTrigger value="broadcast"><Megaphone className="mr-1 h-4 w-4" />Broadcast</TabsTrigger>
               <TabsTrigger value="event"><Sparkles className="mr-1 h-4 w-4" />Evento</TabsTrigger>
-              <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Usuarios</TabsTrigger>
-              <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Historial</TabsTrigger>
+              <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Users</TabsTrigger>
+              <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Hist.</TabsTrigger>
             </TabsList>
 
             <TabsContent value="live" className="mt-4 space-y-3">
@@ -327,14 +329,17 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     {active.map((s) => {
                       const mins = Math.floor((Date.now() - new Date(s.start_time).getTime()) / 60000);
                       return (
-                        <li key={s.id} className="flex items-center justify-between py-2 text-sm">
-                          <div>
-                            <div className="font-medium">{s.user_name}</div>
+                        <li key={s.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{s.user_name}</div>
                             <div className="text-xs text-muted-foreground">
                               Inicio: {new Date(s.start_time).toLocaleTimeString()} · {mins} min
                             </div>
                           </div>
                           <span className="h-2 w-2 rounded-full bg-primary" />
+                          <Button size="sm" variant="destructive" onClick={() => kickUser(s)} className="h-7 px-2 text-xs">
+                            <LogOut className="mr-1 h-3 w-3" /> Kick
+                          </Button>
                         </li>
                       );
                     })}
