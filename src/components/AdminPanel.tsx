@@ -242,11 +242,47 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     loadAll();
   };
 
-  // Send image broadcast
+  // Handle file selection (with preview)
+  const onPickFile = (f: File | null) => {
+    setBcastFile(f);
+    if (bcastFilePreview) URL.revokeObjectURL(bcastFilePreview);
+    setBcastFilePreview(f ? URL.createObjectURL(f) : "");
+  };
+
+  // Send image broadcast (uploads file if provided, else uses URL)
   const sendImageBroadcast = async () => {
-    const url = bcastImg.trim();
-    if (!url) return toast.error("Pega una URL de imagen");
     if (bcastImgMins <= 0) return toast.error("Duración inválida");
+    let url = bcastImg.trim();
+
+    if (bcastFile) {
+      setUploading(true);
+      try {
+        const ext = bcastFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("announcements_images")
+          .upload(path, bcastFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: bcastFile.type || undefined,
+          });
+        if (upErr) {
+          setUploading(false);
+          return toast.error("Error al subir: " + upErr.message);
+        }
+        const { data: pub } = supabase.storage
+          .from("announcements_images")
+          .getPublicUrl(path);
+        url = pub.publicUrl;
+      } catch (e: any) {
+        setUploading(false);
+        return toast.error("Error al subir: " + (e?.message ?? "desconocido"));
+      }
+      setUploading(false);
+    }
+
+    if (!url) return toast.error("Subí un archivo o pegá una URL");
+
     const expires = new Date(Date.now() + bcastImgMins * 60 * 1000).toISOString();
     const { error } = await (supabase as any).from("broadcasts").insert({
       type: "image",
@@ -256,6 +292,7 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     if (error) return toast.error("Error al enviar");
     toast.success(`🖼 Pop-up enviado por ${bcastImgMins} min`);
     setBcastImg("");
+    onPickFile(null);
     loadAll();
   };
 
