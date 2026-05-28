@@ -45,6 +45,9 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [bcastMins, setBcastMins] = useState(10);
   const [bcastImg, setBcastImg] = useState("");
   const [bcastImgMins, setBcastImgMins] = useState(15);
+  const [bcastFile, setBcastFile] = useState<File | null>(null);
+  const [bcastFilePreview, setBcastFilePreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
   const [bcasts, setBcasts] = useState<any[]>([]);
 
   useEffect(() => {
