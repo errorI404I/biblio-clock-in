@@ -45,6 +45,9 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [bcastMins, setBcastMins] = useState(10);
   const [bcastImg, setBcastImg] = useState("");
   const [bcastImgMins, setBcastImgMins] = useState(15);
+  const [bcastFile, setBcastFile] = useState<File | null>(null);
+  const [bcastFilePreview, setBcastFilePreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
   const [bcasts, setBcasts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -239,11 +242,47 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     loadAll();
   };
 
-  // Send image broadcast
+  // Handle file selection (with preview)
+  const onPickFile = (f: File | null) => {
+    setBcastFile(f);
+    if (bcastFilePreview) URL.revokeObjectURL(bcastFilePreview);
+    setBcastFilePreview(f ? URL.createObjectURL(f) : "");
+  };
+
+  // Send image broadcast (uploads file if provided, else uses URL)
   const sendImageBroadcast = async () => {
-    const url = bcastImg.trim();
-    if (!url) return toast.error("Pega una URL de imagen");
     if (bcastImgMins <= 0) return toast.error("Duración inválida");
+    let url = bcastImg.trim();
+
+    if (bcastFile) {
+      setUploading(true);
+      try {
+        const ext = bcastFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("announcements_images")
+          .upload(path, bcastFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: bcastFile.type || undefined,
+          });
+        if (upErr) {
+          setUploading(false);
+          return toast.error("Error al subir: " + upErr.message);
+        }
+        const { data: pub } = supabase.storage
+          .from("announcements_images")
+          .getPublicUrl(path);
+        url = pub.publicUrl;
+      } catch (e: any) {
+        setUploading(false);
+        return toast.error("Error al subir: " + (e?.message ?? "desconocido"));
+      }
+      setUploading(false);
+    }
+
+    if (!url) return toast.error("Subí un archivo o pegá una URL");
+
     const expires = new Date(Date.now() + bcastImgMins * 60 * 1000).toISOString();
     const { error } = await (supabase as any).from("broadcasts").insert({
       type: "image",
@@ -253,6 +292,7 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     if (error) return toast.error("Error al enviar");
     toast.success(`🖼 Pop-up enviado por ${bcastImgMins} min`);
     setBcastImg("");
+    onPickFile(null);
     loadAll();
   };
 
@@ -410,11 +450,62 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
                   <ImageIcon className="h-4 w-4" /> Pop-up de imagen
                 </h3>
+
+                {/* Drag & drop / file picker */}
+                <label
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const f = e.dataTransfer.files?.[0];
+                    if (f && f.type.startsWith("image/")) onPickFile(f);
+                    else if (f) toast.error("Solo se permiten imágenes");
+                  }}
+                  className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border p-4 text-center text-xs text-muted-foreground cursor-pointer hover:bg-muted/40"
+                >
+                  <ImageIcon className="h-5 w-5" />
+                  <span>Arrastrá una imagen aquí o hacé click para elegir</span>
+                  <span className="text-[10px] opacity-70">JPG, PNG, WEBP, GIF</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+
+                {bcastFile && (
+                  <div className="flex items-center gap-2 rounded-md border p-2">
+                    <img
+                      src={bcastFilePreview}
+                      alt="preview"
+                      className="h-16 w-16 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1 text-xs">
+                      <div className="truncate font-medium">{bcastFile.name}</div>
+                      <div className="text-muted-foreground">
+                        {(bcastFile.size / 1024).toFixed(1)} KB
+                      </div>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => onPickFile(null)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
+                  <span className="relative mx-auto block w-fit bg-background px-2 text-[10px] uppercase text-muted-foreground">
+                    o usar URL
+                  </span>
+                </div>
+
                 <Input
                   placeholder="URL de la imagen (https://...)"
                   value={bcastImg}
                   onChange={(e) => setBcastImg(e.target.value)}
+                  disabled={!!bcastFile}
                 />
+
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Duración (min)</Label>
                   <Input
@@ -424,14 +515,17 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     value={bcastImgMins}
                     onChange={(e) => setBcastImgMins(parseInt(e.target.value, 10) || 1)}
                   />
-                  <Button onClick={sendImageBroadcast} className="ml-auto">
-                    <ImageIcon className="mr-2 h-4 w-4" /> Enviar
+                  <Button onClick={sendImageBroadcast} disabled={uploading} className="ml-auto">
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    {uploading ? "Subiendo..." : "Enviar Foto"}
                   </Button>
                 </div>
-                {bcastImg && (
+
+                {!bcastFile && bcastImg && (
                   <img src={bcastImg} alt="preview" className="max-h-32 rounded-md border object-contain" />
                 )}
               </Card>
+
 
               <Card className="p-4">
                 <h3 className="mb-3 text-sm font-semibold">Broadcasts ({bcasts.length})</h3>
