@@ -62,6 +62,44 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
     return () => clearInterval(t);
   }, [authed]);
 
+  // Hook 20:00 hs (AR, UTC-3): registra cierre general en el log del Diag
+  useEffect(() => {
+    if (!authed) return;
+    let cancelled = false;
+    const msToNextClose = () => {
+      const now = Date.now();
+      const t = new Date();
+      t.setUTCHours(23, 0, 0, 0); // 20:00 AR = 23:00 UTC
+      if (t.getTime() <= now) t.setUTCDate(t.getUTCDate() + 1);
+      return t.getTime() - now;
+    };
+    const fire = async () => {
+      if (cancelled) return;
+      const stamp = () => new Date().toLocaleTimeString("es-AR", { hour12: false });
+      setDiagLogs((prev) => [...prev, `[${stamp()}] 🚨 HORA DE CIERRE ALCANZADA (20:00 hs)`]);
+      setDiagLogs((prev) => [...prev, `[${stamp()}] 🔐 Cerrando y asegurando sesiones en masa de forma automática...`]);
+      const { data } = await supabase.from("sessions").select("id").is("end_time", null);
+      const pending = data?.length ?? 0;
+      await new Promise((r) => setTimeout(r, 1500));
+      const { data: stillOpen } = await supabase.from("sessions").select("id").is("end_time", null);
+      const remaining = stillOpen?.length ?? 0;
+      const closed = Math.max(0, pending - remaining);
+      setDiagLogs((prev) => [
+        ...prev,
+        `[${stamp()}] ✅ Sistema cerrado con éxito. ${closed} sesiones cargadas al ranking. (Sistema bloqueado hasta las 07:00)`,
+      ]);
+      loadAll();
+    };
+    let timer = setTimeout(async function tick() {
+      await fire();
+      if (!cancelled) timer = setTimeout(tick, msToNextClose());
+    }, msToNextClose());
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [authed]);
+
   const appendLog = (line: string) =>
     setDiagLogs((prev) => [...prev.slice(-300), line]);
 

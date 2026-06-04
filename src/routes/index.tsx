@@ -19,6 +19,32 @@ const ALLOWED_IP = "131.221.0.8";
 const STORAGE_KEY = "horasbiblio_user_name";
 const HEARTBEAT_MS = 60 * 60 * 1000; // 1 hora (guardado progresivo)
 const OFFLINE_GRACE_MS = 60 * 1000; // 1 minuto
+const OPEN_HOUR_AR = 7;   // 07:00 hs apertura
+const CLOSE_HOUR_AR = 20; // 20:00 hs cierre general
+
+// Argentina = UTC-3 (sin DST)
+function getArgHour(d: Date = new Date()) {
+  return (d.getUTCHours() + 24 - 3) % 24;
+}
+function isWithinOpenHours(d: Date = new Date()) {
+  const h = getArgHour(d);
+  return h >= OPEN_HOUR_AR && h < CLOSE_HOUR_AR;
+}
+// Próximo 20:00 AR (UTC = 23:00) en ms
+function msToNextClose() {
+  const now = Date.now();
+  const t = new Date();
+  t.setUTCHours(CLOSE_HOUR_AR + 3, 0, 0, 0);
+  if (t.getTime() <= now) t.setUTCDate(t.getUTCDate() + 1);
+  return t.getTime() - now;
+}
+// Devuelve el ISO del 20:00 AR del día actual (o el más reciente ya pasado)
+function lastCloseIso() {
+  const t = new Date();
+  t.setUTCHours(CLOSE_HOUR_AR + 3, 0, 0, 0);
+  if (t.getTime() > Date.now()) t.setUTCDate(t.getUTCDate() - 1);
+  return t.toISOString();
+}
 
 type Session = {
   id: string;
@@ -77,6 +103,37 @@ function formatDuration(ms: number) {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+async function massCloseAt(endIso: string) {
+  const { data: sessions } = await supabase
+    .from("sessions")
+    .select("id,start_time,user_name")
+    .is("end_time", null);
+  if (!sessions || sessions.length === 0) return 0;
+  const ev = await getActiveMultiplier();
+  const endMs = new Date(endIso).getTime();
+  let count = 0;
+  for (const s of sessions) {
+    const raw = Math.max(
+      1,
+      Math.round((endMs - new Date(s.start_time).getTime()) / 60000)
+    );
+    const minutes = Math.round(raw * ev.multiplier);
+    const { error } = await supabase
+      .from("sessions")
+      .update({
+        end_time: endIso,
+        total_minutes: minutes,
+        last_seen: endIso,
+        multiplier: ev.multiplier,
+        event_name: ev.active ? ev.event_name : null,
+      })
+      .eq("id", s.id)
+      .is("end_time", null); // idempotente entre múltiples clientes
+    if (!error) count++;
+  }
+  return count;
 }
 
 function Index() {
@@ -141,6 +198,14 @@ function Index() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [activeSession]);
+
+  // Tick coarse (cada 30s) para refrescar gate de horario fuera/dentro
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const systemOpen = isWithinOpenHours(new Date(now));
 
   const loadLeaders = useCallback(async () => {
     const { data } = await supabase
@@ -221,6 +286,34 @@ function Index() {
     };
   }, [loadLeaders]);
 
+  // Cierre General Automático a las 20:00 hs (AR)
+  useEffect(() => {
+    let cancelled = false;
+    const fire = async () => {
+      if (cancelled) return;
+      const endIso = lastCloseIso();
+      const closed = await massCloseAt(endIso);
+      if (closed > 0) {
+        toast.message(`🚨 Cierre 20:00 hs · ${closed} sesiones aseguradas en el ranking.`);
+      }
+      setActiveSession(null);
+      loadLeaders();
+    };
+    const schedule = () => {
+      const ms = msToNextClose();
+      return setTimeout(async () => {
+        await fire();
+        // reprogramar para el próximo día
+        if (!cancelled) timer = schedule();
+      }, ms);
+    };
+    let timer = schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [loadLeaders]);
+
   const handleCheckIn = async () => {
     const name = userName.trim();
     if (!name) {
@@ -228,6 +321,12 @@ function Index() {
       return;
     }
     if (!isAllowed) return;
+    if (!isWithinOpenHours()) {
+      toast.error("El sistema está cerrado", {
+        description: `El horario de conexión es de ${String(OPEN_HOUR_AR).padStart(2, "0")}:00 a ${String(CLOSE_HOUR_AR).padStart(2, "0")}:00 hs. ¡A descansar!`,
+      });
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, name);
     setBusy(true);
     const nowIso = new Date().toISOString();
@@ -595,19 +694,26 @@ function Index() {
                   Check-out
                 </Button>
               ) : (
-                <Button
-                  onClick={handleCheckIn}
-                  disabled={!isAllowed || busy || !userName.trim()}
-                  className="w-full"
-                  size="lg"
-                >
-                  {busy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <LogIn className="mr-2 h-4 w-4" />
+                <>
+                  {!systemOpen && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-center text-sm">
+                      🌙 <span className="font-semibold">Sistema cerrado.</span> Horario de conexión: {String(OPEN_HOUR_AR).padStart(2, "0")}:00 a {String(CLOSE_HOUR_AR).padStart(2, "0")}:00 hs. ¡A descansar!
+                    </div>
                   )}
-                  Check-in
-                </Button>
+                  <Button
+                    onClick={handleCheckIn}
+                    disabled={!isAllowed || busy || !userName.trim() || !systemOpen}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {busy ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogIn className="mr-2 h-4 w-4" />
+                    )}
+                    Check-in
+                  </Button>
+                </>
               )}
             </Card>
           </TabsContent>
