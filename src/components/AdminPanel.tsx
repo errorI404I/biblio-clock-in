@@ -8,9 +8,11 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users, LogOut, Clock, Megaphone, Image as ImageIcon, Trophy } from "lucide-react";
+import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users, LogOut, Clock, Megaphone, Image as ImageIcon, Trophy, Terminal, PlayCircle } from "lucide-react";
 
 const ADMIN_PASS = "54321";
+const ALLOWED_IP = "131.221.0.8";
+const HEARTBEAT_TOLERANCE_MS = 70 * 60 * 1000; // ventana: 1h + margen
 
 type Session = {
   id: string;
@@ -49,6 +51,103 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [bcastFilePreview, setBcastFilePreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [bcasts, setBcasts] = useState<any[]>([]);
+  // Diagnóstico
+  const [diagLogs, setDiagLogs] = useState<string[]>([]);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagNow, setDiagNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!authed) return;
+    const t = setInterval(() => setDiagNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [authed]);
+
+  const appendLog = (line: string) =>
+    setDiagLogs((prev) => [...prev.slice(-300), line]);
+
+  const runDiagnostic = async (simulated: boolean) => {
+    if (diagRunning) return;
+    setDiagRunning(true);
+    const stamp = () => new Date().toLocaleTimeString("es-AR", { hour12: false });
+    const tag = simulated ? "🧪 SIMULACIÓN" : "⏳ INICIANDO CHEQUEO GLOBAL DE HORA EN PUNTO";
+    appendLog(`[${stamp()}] ${tag}`);
+    const { data: sessions } = await supabase
+      .from("sessions")
+      .select("*")
+      .is("end_time", null);
+    appendLog(`[${stamp()}] 📋 Sesiones activas detectadas: ${sessions?.length ?? 0}`);
+    appendLog(`[${stamp()}] 🛡 IP autorizada: ${ALLOWED_IP}`);
+    if (!sessions || sessions.length === 0) {
+      appendLog(`[${stamp()}] ✅ Nada que procesar.`);
+      setDiagRunning(false);
+      return;
+    }
+    const { data: settingRow } = await supabase
+      .from("settings")
+      .select("multiplier,event_name,active")
+      .eq("key", "multiplier")
+      .maybeSingle();
+    const mult = settingRow?.active ? Number(settingRow.multiplier) || 1 : 1;
+    const evName = settingRow?.active ? settingRow.event_name : null;
+    let kept = 0;
+    let kicked = 0;
+    for (const s of sessions) {
+      const startMs = new Date(s.start_time).getTime();
+      const lastSeenMs = s.last_seen ? new Date(s.last_seen).getTime() : startMs;
+      const ageMs = Date.now() - lastSeenMs;
+      const isFresh = ageMs <= HEARTBEAT_TOLERANCE_MS;
+      const accumMin = Math.max(1, Math.round((Date.now() - startMs) / 60000));
+      const lastSeenStr = new Date(lastSeenMs).toLocaleTimeString("es-AR", { hour12: false });
+      appendLog(`[${stamp()}] 🔎 Analizando usuario: ${s.user_name}...`);
+      appendLog(`           - Último latido válido: ${lastSeenStr} (hace ${Math.round(ageMs / 60000)} min)`);
+      appendLog(`           - IP Autorizada: ${ALLOWED_IP}`);
+      if (isFresh) {
+        appendLog(`           - Resultado: MATCH. El usuario sigue conectado.`);
+        if (simulated) {
+          appendLog(`           - Acción (sim): Se blindarían ${Math.round(accumMin * mult)} min. Sesión continúa activa.`);
+        } else {
+          appendLog(`           - Acción: Se blindan ${Math.round(accumMin * mult)} min. Sesión continúa activa.`);
+        }
+        kept++;
+      } else {
+        const savedRaw = Math.max(1, Math.round((lastSeenMs - startMs) / 60000));
+        const saved = Math.round(savedRaw * mult);
+        appendLog(`           - Resultado: MISMATCH. Usuario fuera de rango (latido viejo).`);
+        if (simulated) {
+          appendLog(`           - Acción (sim): CORTE DE EMERGENCIA. Se cerraría a las ${lastSeenStr}. Minutos salvados: ${saved} min.`);
+        } else {
+          const { error } = await supabase
+            .from("sessions")
+            .update({
+              end_time: new Date(lastSeenMs).toISOString(),
+              total_minutes: saved,
+              last_seen: new Date(lastSeenMs).toISOString(),
+              multiplier: mult,
+              event_name: evName,
+            })
+            .eq("id", s.id);
+          if (error) {
+            appendLog(`           - ❌ Error al cerrar: ${error.message}`);
+          } else {
+            appendLog(`           - Acción: CORTE DE EMERGENCIA. Sesión cerrada a las ${lastSeenStr}. Minutos salvados: ${saved} min. Estado: Offline.`);
+          }
+        }
+        kicked++;
+      }
+    }
+    const nextHour = new Date();
+    nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+    appendLog(`[${stamp()}] ✅ CHEQUEO FINALIZADO. Procesados: ${sessions.length} (mantenidos: ${kept}, cortados: ${kicked}). Próximo control a las ${nextHour.toLocaleTimeString("es-AR", { hour12: false })}.`);
+    setDiagRunning(false);
+    loadAll();
+  };
+
+  const msToNextHourTick = (() => {
+    const n = new Date(diagNow);
+    const next = new Date(n);
+    next.setHours(n.getHours() + 1, 0, 0, 0);
+    return next.getTime() - n.getTime();
+  })();
 
   useEffect(() => {
     if (!open) {
@@ -342,13 +441,14 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
           </div>
         ) : (
           <Tabs defaultValue="live">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="live"><Activity className="mr-1 h-4 w-4" />Vivo</TabsTrigger>
               <TabsTrigger value="ranking"><Trophy className="mr-1 h-4 w-4" />Ranking</TabsTrigger>
-              <TabsTrigger value="broadcast"><Megaphone className="mr-1 h-4 w-4" />Broadcast</TabsTrigger>
+              <TabsTrigger value="broadcast"><Megaphone className="mr-1 h-4 w-4" />Broad.</TabsTrigger>
               <TabsTrigger value="event"><Sparkles className="mr-1 h-4 w-4" />Evento</TabsTrigger>
               <TabsTrigger value="users"><Users className="mr-1 h-4 w-4" />Users</TabsTrigger>
               <TabsTrigger value="history"><History className="mr-1 h-4 w-4" />Hist.</TabsTrigger>
+              <TabsTrigger value="diag"><Terminal className="mr-1 h-4 w-4" />Diag</TabsTrigger>
             </TabsList>
 
             <TabsContent value="live" className="mt-4 space-y-3">
@@ -655,6 +755,86 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                   </ul>
                 )}
               </Card>
+            </TabsContent>
+
+            <TabsContent value="diag" className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Próximo corte global</div>
+                  <div className="mt-1 font-mono text-lg font-bold">
+                    {(() => {
+                      const total = Math.max(0, Math.floor(msToNextHourTick / 1000));
+                      const m = Math.floor(total / 60);
+                      const s = total % 60;
+                      return `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+                    })()}
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">IP Autorizada</div>
+                  <div className="mt-1 font-mono text-lg font-bold">{ALLOWED_IP}</div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Usuarios en la mira</div>
+                  <div className="mt-1 font-mono text-lg font-bold">{active.length}</div>
+                </Card>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => runDiagnostic(true)}
+                  disabled={diagRunning}
+                  size="lg"
+                  className="font-bold uppercase tracking-wider"
+                >
+                  <PlayCircle className="mr-2 h-5 w-5" />
+                  Forzar Chequeo Ahora (Simular Hora en Punto)
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => runDiagnostic(false)}
+                  disabled={diagRunning}
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  Ejecutar Real (cortes verdaderos)
+                </Button>
+                <Button variant="outline" onClick={() => setDiagLogs([])} disabled={diagRunning}>
+                  <Trash2 className="mr-2 h-3 w-3" />
+                  Limpiar
+                </Button>
+              </div>
+
+              <div
+                className="h-[360px] overflow-auto rounded-md border border-green-900/50 bg-black p-3 font-mono text-[11px] leading-relaxed text-green-400 shadow-inner"
+                style={{ whiteSpace: "pre-wrap" }}
+              >
+                {diagLogs.length === 0 ? (
+                  <div className="text-green-700">
+                    {"// Consola de Diagnóstico del Servidor"}
+                    {"\n// Esperando eventos... Presioná 'Forzar Chequeo' para simular."}
+                  </div>
+                ) : (
+                  diagLogs.map((l, i) => (
+                    <div
+                      key={i}
+                      className={
+                        l.includes("MISMATCH") || l.includes("CORTE") || l.includes("❌")
+                          ? "text-red-400"
+                          : l.includes("MATCH") || l.includes("✅")
+                            ? "text-green-300"
+                            : l.includes("🔎") || l.includes("INICIANDO") || l.includes("SIMULACIÓN")
+                              ? "text-yellow-300"
+                              : "text-green-400"
+                      }
+                    >
+                      {l}
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Reglas: un usuario es MATCH si su último latido es menor a 70 min. MISMATCH → corte de emergencia en el último latido válido (no se pierden los minutos blindados).
+              </p>
             </TabsContent>
           </Tabs>
         )}
