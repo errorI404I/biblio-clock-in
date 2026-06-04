@@ -8,9 +8,11 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users, LogOut, Clock, Megaphone, Image as ImageIcon, Trophy } from "lucide-react";
+import { Trash2, Save, Lock, Activity, Sparkles, History, Zap, Pencil, Users, LogOut, Clock, Megaphone, Image as ImageIcon, Trophy, Terminal, PlayCircle } from "lucide-react";
 
 const ADMIN_PASS = "54321";
+const ALLOWED_IP = "131.221.0.8";
+const HEARTBEAT_TOLERANCE_MS = 70 * 60 * 1000; // ventana: 1h + margen
 
 type Session = {
   id: string;
