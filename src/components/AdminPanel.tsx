@@ -51,6 +51,103 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [bcastFilePreview, setBcastFilePreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [bcasts, setBcasts] = useState<any[]>([]);
+  // Diagnóstico
+  const [diagLogs, setDiagLogs] = useState<string[]>([]);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagNow, setDiagNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!authed) return;
+    const t = setInterval(() => setDiagNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [authed]);
+
+  const appendLog = (line: string) =>
+    setDiagLogs((prev) => [...prev.slice(-300), line]);
+
+  const runDiagnostic = async (simulated: boolean) => {
+    if (diagRunning) return;
+    setDiagRunning(true);
+    const stamp = () => new Date().toLocaleTimeString("es-AR", { hour12: false });
+    const tag = simulated ? "🧪 SIMULACIÓN" : "⏳ INICIANDO CHEQUEO GLOBAL DE HORA EN PUNTO";
+    appendLog(`[${stamp()}] ${tag}`);
+    const { data: sessions } = await supabase
+      .from("sessions")
+      .select("*")
+      .is("end_time", null);
+    appendLog(`[${stamp()}] 📋 Sesiones activas detectadas: ${sessions?.length ?? 0}`);
+    appendLog(`[${stamp()}] 🛡 IP autorizada: ${ALLOWED_IP}`);
+    if (!sessions || sessions.length === 0) {
+      appendLog(`[${stamp()}] ✅ Nada que procesar.`);
+      setDiagRunning(false);
+      return;
+    }
+    const { data: settingRow } = await supabase
+      .from("settings")
+      .select("multiplier,event_name,active")
+      .eq("key", "multiplier")
+      .maybeSingle();
+    const mult = settingRow?.active ? Number(settingRow.multiplier) || 1 : 1;
+    const evName = settingRow?.active ? settingRow.event_name : null;
+    let kept = 0;
+    let kicked = 0;
+    for (const s of sessions) {
+      const startMs = new Date(s.start_time).getTime();
+      const lastSeenMs = s.last_seen ? new Date(s.last_seen).getTime() : startMs;
+      const ageMs = Date.now() - lastSeenMs;
+      const isFresh = ageMs <= HEARTBEAT_TOLERANCE_MS;
+      const accumMin = Math.max(1, Math.round((Date.now() - startMs) / 60000));
+      const lastSeenStr = new Date(lastSeenMs).toLocaleTimeString("es-AR", { hour12: false });
+      appendLog(`[${stamp()}] 🔎 Analizando usuario: ${s.user_name}...`);
+      appendLog(`           - Último latido válido: ${lastSeenStr} (hace ${Math.round(ageMs / 60000)} min)`);
+      appendLog(`           - IP Autorizada: ${ALLOWED_IP}`);
+      if (isFresh) {
+        appendLog(`           - Resultado: MATCH. El usuario sigue conectado.`);
+        if (simulated) {
+          appendLog(`           - Acción (sim): Se blindarían ${Math.round(accumMin * mult)} min. Sesión continúa activa.`);
+        } else {
+          appendLog(`           - Acción: Se blindan ${Math.round(accumMin * mult)} min. Sesión continúa activa.`);
+        }
+        kept++;
+      } else {
+        const savedRaw = Math.max(1, Math.round((lastSeenMs - startMs) / 60000));
+        const saved = Math.round(savedRaw * mult);
+        appendLog(`           - Resultado: MISMATCH. Usuario fuera de rango (latido viejo).`);
+        if (simulated) {
+          appendLog(`           - Acción (sim): CORTE DE EMERGENCIA. Se cerraría a las ${lastSeenStr}. Minutos salvados: ${saved} min.`);
+        } else {
+          const { error } = await supabase
+            .from("sessions")
+            .update({
+              end_time: new Date(lastSeenMs).toISOString(),
+              total_minutes: saved,
+              last_seen: new Date(lastSeenMs).toISOString(),
+              multiplier: mult,
+              event_name: evName,
+            })
+            .eq("id", s.id);
+          if (error) {
+            appendLog(`           - ❌ Error al cerrar: ${error.message}`);
+          } else {
+            appendLog(`           - Acción: CORTE DE EMERGENCIA. Sesión cerrada a las ${lastSeenStr}. Minutos salvados: ${saved} min. Estado: Offline.`);
+          }
+        }
+        kicked++;
+      }
+    }
+    const nextHour = new Date();
+    nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+    appendLog(`[${stamp()}] ✅ CHEQUEO FINALIZADO. Procesados: ${sessions.length} (mantenidos: ${kept}, cortados: ${kicked}). Próximo control a las ${nextHour.toLocaleTimeString("es-AR", { hour12: false })}.`);
+    setDiagRunning(false);
+    loadAll();
+  };
+
+  const msToNextHourTick = (() => {
+    const n = new Date(diagNow);
+    const next = new Date(n);
+    next.setHours(n.getHours() + 1, 0, 0, 0);
+    return next.getTime() - n.getTime();
+  })();
 
   useEffect(() => {
     if (!open) {
