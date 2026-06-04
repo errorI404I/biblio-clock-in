@@ -286,6 +286,34 @@ function Index() {
     };
   }, [loadLeaders]);
 
+  // Cierre General Automático a las 20:00 hs (AR)
+  useEffect(() => {
+    let cancelled = false;
+    const fire = async () => {
+      if (cancelled) return;
+      const endIso = lastCloseIso();
+      const closed = await massCloseAt(endIso);
+      if (closed > 0) {
+        toast.message(`🚨 Cierre 20:00 hs · ${closed} sesiones aseguradas en el ranking.`);
+      }
+      setActiveSession(null);
+      loadLeaders();
+    };
+    const schedule = () => {
+      const ms = msToNextClose();
+      return setTimeout(async () => {
+        await fire();
+        // reprogramar para el próximo día
+        if (!cancelled) timer = schedule();
+      }, ms);
+    };
+    let timer = schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [loadLeaders]);
+
   const handleCheckIn = async () => {
     const name = userName.trim();
     if (!name) {
