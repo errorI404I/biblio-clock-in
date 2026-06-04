@@ -285,6 +285,12 @@ function Index() {
       return;
     }
     if (!isAllowed) return;
+    if (!isWithinOpenHours()) {
+      toast.error("El sistema está cerrado", {
+        description: `El horario de conexión es de ${String(OPEN_HOUR_AR).padStart(2, "0")}:00 a ${String(CLOSE_HOUR_AR).padStart(2, "0")}:00 hs. ¡A descansar!`,
+      });
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, name);
     setBusy(true);
     const nowIso = new Date().toISOString();
