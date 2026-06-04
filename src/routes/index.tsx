@@ -19,6 +19,32 @@ const ALLOWED_IP = "131.221.0.8";
 const STORAGE_KEY = "horasbiblio_user_name";
 const HEARTBEAT_MS = 60 * 60 * 1000; // 1 hora (guardado progresivo)
 const OFFLINE_GRACE_MS = 60 * 1000; // 1 minuto
+const OPEN_HOUR_AR = 7;   // 07:00 hs apertura
+const CLOSE_HOUR_AR = 20; // 20:00 hs cierre general
+
+// Argentina = UTC-3 (sin DST)
+function getArgHour(d: Date = new Date()) {
+  return (d.getUTCHours() + 24 - 3) % 24;
+}
+function isWithinOpenHours(d: Date = new Date()) {
+  const h = getArgHour(d);
+  return h >= OPEN_HOUR_AR && h < CLOSE_HOUR_AR;
+}
+// Próximo 20:00 AR (UTC = 23:00) en ms
+function msToNextClose() {
+  const now = Date.now();
+  const t = new Date();
+  t.setUTCHours(CLOSE_HOUR_AR + 3, 0, 0, 0);
+  if (t.getTime() <= now) t.setUTCDate(t.getUTCDate() + 1);
+  return t.getTime() - now;
+}
+// Devuelve el ISO del 20:00 AR del día actual (o el más reciente ya pasado)
+function lastCloseIso() {
+  const t = new Date();
+  t.setUTCHours(CLOSE_HOUR_AR + 3, 0, 0, 0);
+  if (t.getTime() > Date.now()) t.setUTCDate(t.getUTCDate() - 1);
+  return t.toISOString();
+}
 
 type Session = {
   id: string;
