@@ -694,19 +694,26 @@ function Index() {
                   Check-out
                 </Button>
               ) : (
-                <Button
-                  onClick={handleCheckIn}
-                  disabled={!isAllowed || busy || !userName.trim()}
-                  className="w-full"
-                  size="lg"
-                >
-                  {busy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <LogIn className="mr-2 h-4 w-4" />
+                <>
+                  {!systemOpen && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-center text-sm">
+                      🌙 <span className="font-semibold">Sistema cerrado.</span> Horario de conexión: {String(OPEN_HOUR_AR).padStart(2, "0")}:00 a {String(CLOSE_HOUR_AR).padStart(2, "0")}:00 hs. ¡A descansar!
+                    </div>
                   )}
-                  Check-in
-                </Button>
+                  <Button
+                    onClick={handleCheckIn}
+                    disabled={!isAllowed || busy || !userName.trim() || !systemOpen}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {busy ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogIn className="mr-2 h-4 w-4" />
+                    )}
+                    Check-in
+                  </Button>
+                </>
               )}
             </Card>
           </TabsContent>
