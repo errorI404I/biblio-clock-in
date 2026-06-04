@@ -105,6 +105,37 @@ function formatDuration(ms: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+async function massCloseAt(endIso: string) {
+  const { data: sessions } = await supabase
+    .from("sessions")
+    .select("id,start_time,user_name")
+    .is("end_time", null);
+  if (!sessions || sessions.length === 0) return 0;
+  const ev = await getActiveMultiplier();
+  const endMs = new Date(endIso).getTime();
+  let count = 0;
+  for (const s of sessions) {
+    const raw = Math.max(
+      1,
+      Math.round((endMs - new Date(s.start_time).getTime()) / 60000)
+    );
+    const minutes = Math.round(raw * ev.multiplier);
+    const { error } = await supabase
+      .from("sessions")
+      .update({
+        end_time: endIso,
+        total_minutes: minutes,
+        last_seen: endIso,
+        multiplier: ev.multiplier,
+        event_name: ev.active ? ev.event_name : null,
+      })
+      .eq("id", s.id)
+      .is("end_time", null); // idempotente entre múltiples clientes
+    if (!error) count++;
+  }
+  return count;
+}
+
 function Index() {
   const [ip, setIp] = useState<string | null>(null);
   const [ipLoading, setIpLoading] = useState(true);
