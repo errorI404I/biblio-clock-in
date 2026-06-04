@@ -199,6 +199,14 @@ function Index() {
     return () => clearInterval(t);
   }, [activeSession]);
 
+  // Tick coarse (cada 30s) para refrescar gate de horario fuera/dentro
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const systemOpen = isWithinOpenHours(new Date(now));
+
   const loadLeaders = useCallback(async () => {
     const { data } = await supabase
       .from("sessions")
