@@ -756,6 +756,86 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                 )}
               </Card>
             </TabsContent>
+
+            <TabsContent value="diag" className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Próximo corte global</div>
+                  <div className="mt-1 font-mono text-lg font-bold">
+                    {(() => {
+                      const total = Math.max(0, Math.floor(msToNextHourTick / 1000));
+                      const m = Math.floor(total / 60);
+                      const s = total % 60;
+                      return `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+                    })()}
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">IP Autorizada</div>
+                  <div className="mt-1 font-mono text-lg font-bold">{ALLOWED_IP}</div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Usuarios en la mira</div>
+                  <div className="mt-1 font-mono text-lg font-bold">{active.length}</div>
+                </Card>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => runDiagnostic(true)}
+                  disabled={diagRunning}
+                  size="lg"
+                  className="font-bold uppercase tracking-wider"
+                >
+                  <PlayCircle className="mr-2 h-5 w-5" />
+                  Forzar Chequeo Ahora (Simular Hora en Punto)
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => runDiagnostic(false)}
+                  disabled={diagRunning}
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  Ejecutar Real (cortes verdaderos)
+                </Button>
+                <Button variant="outline" onClick={() => setDiagLogs([])} disabled={diagRunning}>
+                  <Trash2 className="mr-2 h-3 w-3" />
+                  Limpiar
+                </Button>
+              </div>
+
+              <div
+                className="h-[360px] overflow-auto rounded-md border border-green-900/50 bg-black p-3 font-mono text-[11px] leading-relaxed text-green-400 shadow-inner"
+                style={{ whiteSpace: "pre-wrap" }}
+              >
+                {diagLogs.length === 0 ? (
+                  <div className="text-green-700">
+                    {"// Consola de Diagnóstico del Servidor"}
+                    {"\n// Esperando eventos... Presioná 'Forzar Chequeo' para simular."}
+                  </div>
+                ) : (
+                  diagLogs.map((l, i) => (
+                    <div
+                      key={i}
+                      className={
+                        l.includes("MISMATCH") || l.includes("CORTE") || l.includes("❌")
+                          ? "text-red-400"
+                          : l.includes("MATCH") || l.includes("✅")
+                            ? "text-green-300"
+                            : l.includes("🔎") || l.includes("INICIANDO") || l.includes("SIMULACIÓN")
+                              ? "text-yellow-300"
+                              : "text-green-400"
+                      }
+                    >
+                      {l}
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Reglas: un usuario es MATCH si su último latido es menor a 70 min. MISMATCH → corte de emergencia en el último latido válido (no se pierden los minutos blindados).
+              </p>
+            </TabsContent>
           </Tabs>
         )}
       </DialogContent>
