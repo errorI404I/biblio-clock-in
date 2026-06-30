@@ -757,13 +757,48 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="ev-active">Evento activo</Label>
-                  <Switch id="ev-active" checked={eventActive} onCheckedChange={setEventActive} />
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Label htmlFor="ev-mins" className="text-xs">
+                      Duración del Evento (en minutos)
+                    </Label>
+                    <Input
+                      id="ev-mins"
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="0 = indefinido"
+                      value={eventMinutes || ""}
+                      onChange={(e) => setEventMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    />
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Dejá vacío o 0 para evento manual indefinido.
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <Label htmlFor="ev-active" className="text-xs">Activo</Label>
+                    <Switch id="ev-active" checked={eventActive} onCheckedChange={setEventActive} />
+                  </div>
                 </div>
+
+                {eventActive && eventExpiresAt && (
+                  <div className="rounded-md border border-primary/40 bg-primary/5 p-2 text-center text-xs">
+                    <span className="text-muted-foreground">Vence: </span>
+                    <span className="font-mono font-bold text-primary">
+                      {new Date(eventExpiresAt).toLocaleString("es-AR", { hour12: false })}
+                    </span>
+                  </div>
+                )}
+                {eventActive && !eventExpiresAt && (
+                  <div className="rounded-md border border-border bg-muted/40 p-2 text-center text-xs text-muted-foreground">
+                    Evento indefinido (sin auto-cierre)
+                  </div>
+                )}
+
                 <Button onClick={saveEvent} className="w-full">
                   <Save className="mr-2 h-4 w-4" /> Guardar
                 </Button>
+
               </Card>
             </TabsContent>
 
