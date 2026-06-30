@@ -42,6 +42,8 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [eventName, setEventName] = useState("");
   const [multiplier, setMultiplier] = useState(2);
   const [eventActive, setEventActive] = useState(false);
+  const [eventMinutes, setEventMinutes] = useState<number>(0); // 0 = indefinido
+  const [eventExpiresAt, setEventExpiresAt] = useState<string | null>(null);
   // Broadcast
   const [bcastMsg, setBcastMsg] = useState("");
   const [bcastMins, setBcastMins] = useState(10);
