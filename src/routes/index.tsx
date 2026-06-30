@@ -164,7 +164,7 @@ function Index() {
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false });
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false, expires_at: null });
   const [insult, setInsult] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
