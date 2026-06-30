@@ -210,6 +210,12 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
       setMultiplier(Number(s.multiplier) || 1);
       setEventName(s.event_name ?? "");
       setEventActive(!!s.active);
+      const exp = (s as any).expires_at as string | null;
+      setEventExpiresAt(exp ?? null);
+      if (exp) {
+        const remainMin = Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 60000));
+        setEventMinutes(remainMin);
+      }
     }
     setBcasts(bc ?? []);
   };
@@ -229,19 +235,35 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
 
   const saveEvent = async () => {
     if (!setting) return;
+    // Si activamos y hay minutos > 0, calcular expires_at = ahora + minutos
+    // Si activamos sin minutos (0 o vacío) => indefinido (expires_at = null)
+    // Si lo apagamos => expires_at = null
+    const expiresIso =
+      eventActive && eventMinutes > 0
+        ? new Date(Date.now() + eventMinutes * 60 * 1000).toISOString()
+        : null;
     const { error } = await supabase
       .from("settings")
       .update({
         multiplier,
         event_name: eventName.trim() || null,
         active: eventActive,
+        expires_at: expiresIso,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", setting.id);
     if (error) return toast.error("Error al guardar");
-    toast.success("Evento actualizado");
+    setEventExpiresAt(expiresIso);
+    toast.success(
+      eventActive && expiresIso
+        ? `Evento activado por ${eventMinutes} min`
+        : eventActive
+          ? "Evento activado (indefinido)"
+          : "Evento desactivado"
+    );
     loadAll();
   };
+
 
   const deleteSession = async (id: string) => {
     if (!confirm("¿Eliminar esta sesión?")) return;
