@@ -55,7 +55,7 @@ type Session = {
   last_seen?: string | null;
 };
 
-type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean };
+type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean; expires_at: string | null };
 
 async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   try {
@@ -70,12 +70,28 @@ async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
 async function getActiveMultiplier(): Promise<ActiveEvent> {
   const { data } = await supabase
     .from("settings")
-    .select("multiplier,event_name,active")
+    .select("multiplier,event_name,active,expires_at" as any)
     .eq("key", "multiplier")
     .maybeSingle();
-  if (!data || !data.active) return { multiplier: 1, event_name: null, active: false };
-  return { multiplier: Number(data.multiplier) || 1, event_name: data.event_name, active: !!data.active };
+  const off: ActiveEvent = { multiplier: 1, event_name: null, active: false, expires_at: null };
+  if (!data || !(data as any).active) return off;
+  const expiresAt = (data as any).expires_at as string | null;
+  // Auto-apagar si ya expiró
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
+    await supabase
+      .from("settings")
+      .update({ active: false, expires_at: null, updated_at: new Date().toISOString() } as any)
+      .eq("key", "multiplier");
+    return off;
+  }
+  return {
+    multiplier: Number((data as any).multiplier) || 1,
+    event_name: (data as any).event_name,
+    active: true,
+    expires_at: expiresAt,
+  };
 }
+
 
 async function closeSessionAt(sessionId: string, startTime: string, endIso: string) {
   const rawMinutes = Math.max(
