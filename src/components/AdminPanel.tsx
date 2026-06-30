@@ -42,6 +42,8 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
   const [eventName, setEventName] = useState("");
   const [multiplier, setMultiplier] = useState(2);
   const [eventActive, setEventActive] = useState(false);
+  const [eventMinutes, setEventMinutes] = useState<number>(0); // 0 = indefinido
+  const [eventExpiresAt, setEventExpiresAt] = useState<string | null>(null);
   // Broadcast
   const [bcastMsg, setBcastMsg] = useState("");
   const [bcastMins, setBcastMins] = useState(10);
@@ -208,6 +210,12 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
       setMultiplier(Number(s.multiplier) || 1);
       setEventName(s.event_name ?? "");
       setEventActive(!!s.active);
+      const exp = (s as any).expires_at as string | null;
+      setEventExpiresAt(exp ?? null);
+      if (exp) {
+        const remainMin = Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 60000));
+        setEventMinutes(remainMin);
+      }
     }
     setBcasts(bc ?? []);
   };
@@ -227,19 +235,35 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
 
   const saveEvent = async () => {
     if (!setting) return;
+    // Si activamos y hay minutos > 0, calcular expires_at = ahora + minutos
+    // Si activamos sin minutos (0 o vacío) => indefinido (expires_at = null)
+    // Si lo apagamos => expires_at = null
+    const expiresIso =
+      eventActive && eventMinutes > 0
+        ? new Date(Date.now() + eventMinutes * 60 * 1000).toISOString()
+        : null;
     const { error } = await supabase
       .from("settings")
       .update({
         multiplier,
         event_name: eventName.trim() || null,
         active: eventActive,
+        expires_at: expiresIso,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", setting.id);
     if (error) return toast.error("Error al guardar");
-    toast.success("Evento actualizado");
+    setEventExpiresAt(expiresIso);
+    toast.success(
+      eventActive && expiresIso
+        ? `Evento activado por ${eventMinutes} min`
+        : eventActive
+          ? "Evento activado (indefinido)"
+          : "Evento desactivado"
+    );
     loadAll();
   };
+
 
   const deleteSession = async (id: string) => {
     if (!confirm("¿Eliminar esta sesión?")) return;
@@ -733,13 +757,48 @@ export function AdminPanel({ open, onOpenChange }: { open: boolean; onOpenChange
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="ev-active">Evento activo</Label>
-                  <Switch id="ev-active" checked={eventActive} onCheckedChange={setEventActive} />
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Label htmlFor="ev-mins" className="text-xs">
+                      Duración del Evento (en minutos)
+                    </Label>
+                    <Input
+                      id="ev-mins"
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="0 = indefinido"
+                      value={eventMinutes || ""}
+                      onChange={(e) => setEventMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    />
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Dejá vacío o 0 para evento manual indefinido.
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <Label htmlFor="ev-active" className="text-xs">Activo</Label>
+                    <Switch id="ev-active" checked={eventActive} onCheckedChange={setEventActive} />
+                  </div>
                 </div>
+
+                {eventActive && eventExpiresAt && (
+                  <div className="rounded-md border border-primary/40 bg-primary/5 p-2 text-center text-xs">
+                    <span className="text-muted-foreground">Vence: </span>
+                    <span className="font-mono font-bold text-primary">
+                      {new Date(eventExpiresAt).toLocaleString("es-AR", { hour12: false })}
+                    </span>
+                  </div>
+                )}
+                {eventActive && !eventExpiresAt && (
+                  <div className="rounded-md border border-border bg-muted/40 p-2 text-center text-xs text-muted-foreground">
+                    Evento indefinido (sin auto-cierre)
+                  </div>
+                )}
+
                 <Button onClick={saveEvent} className="w-full">
                   <Save className="mr-2 h-4 w-4" /> Guardar
                 </Button>
+
               </Card>
             </TabsContent>
 

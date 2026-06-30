@@ -55,7 +55,7 @@ type Session = {
   last_seen?: string | null;
 };
 
-type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean };
+type ActiveEvent = { multiplier: number; event_name: string | null; active: boolean; expires_at: string | null };
 
 async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
   try {
@@ -70,12 +70,28 @@ async function fetchPublicIp(signal?: AbortSignal): Promise<string | null> {
 async function getActiveMultiplier(): Promise<ActiveEvent> {
   const { data } = await supabase
     .from("settings")
-    .select("multiplier,event_name,active")
+    .select("multiplier,event_name,active,expires_at" as any)
     .eq("key", "multiplier")
     .maybeSingle();
-  if (!data || !data.active) return { multiplier: 1, event_name: null, active: false };
-  return { multiplier: Number(data.multiplier) || 1, event_name: data.event_name, active: !!data.active };
+  const off: ActiveEvent = { multiplier: 1, event_name: null, active: false, expires_at: null };
+  if (!data || !(data as any).active) return off;
+  const expiresAt = (data as any).expires_at as string | null;
+  // Auto-apagar si ya expiró
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
+    await supabase
+      .from("settings")
+      .update({ active: false, expires_at: null, updated_at: new Date().toISOString() } as any)
+      .eq("key", "multiplier");
+    return off;
+  }
+  return {
+    multiplier: Number((data as any).multiplier) || 1,
+    event_name: (data as any).event_name,
+    active: true,
+    expires_at: expiresAt,
+  };
 }
+
 
 async function closeSessionAt(sessionId: string, startTime: string, endIso: string) {
   const rawMinutes = Math.max(
@@ -148,7 +164,7 @@ function Index() {
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false });
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent>({ multiplier: 1, event_name: null, active: false, expires_at: null });
   const [insult, setInsult] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -164,13 +180,31 @@ function Index() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Live event banner — poll every 15s
+  // Live event banner — poll every 5s; auto-tick local clock every 1s for countdown
   useEffect(() => {
     const load = () => getActiveMultiplier().then(setActiveEvent);
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
+
+  // Ticker dedicado al countdown del evento (1s) — corre solo si hay expires_at
+  const [eventNow, setEventNow] = useState(Date.now());
+  useEffect(() => {
+    if (!activeEvent.active || !activeEvent.expires_at) return;
+    const t = setInterval(() => setEventNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [activeEvent.active, activeEvent.expires_at]);
+
+  // Si el evento expiró localmente, refrescar inmediatamente
+  useEffect(() => {
+    if (!activeEvent.active || !activeEvent.expires_at) return;
+    const remaining = new Date(activeEvent.expires_at).getTime() - eventNow;
+    if (remaining <= 0) {
+      getActiveMultiplier().then(setActiveEvent);
+    }
+  }, [eventNow, activeEvent.active, activeEvent.expires_at]);
+
 
   const isAllowed = ip === ALLOWED_IP;
   const activeSessionRef = useRef<Session | null>(null);
@@ -556,20 +590,44 @@ function Index() {
           </p>
         </header>
 
-        {activeEvent.active && activeEvent.multiplier > 1 && (
-          <div
-            className="mb-6 rounded-xl border border-primary/40 p-4 text-center animate-pulse"
-            style={{ background: "var(--gradient-hero)", boxShadow: "var(--shadow-glow)" }}
-          >
-            <div className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
-              <Sparkles className="h-4 w-4" /> ¡Evento activo!
+        {activeEvent.active && activeEvent.multiplier > 1 && (() => {
+          const expMs = activeEvent.expires_at ? new Date(activeEvent.expires_at).getTime() : null;
+          const remainMs = expMs ? Math.max(0, expMs - eventNow) : null;
+          if (expMs && remainMs === 0) return null; // limpieza fluida cuando llega 00:00
+          const fmt = (ms: number) => {
+            const total = Math.floor(ms / 1000);
+            const h = Math.floor(total / 3600);
+            const m = Math.floor((total % 3600) / 60);
+            const s = total % 60;
+            return h > 0
+              ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+              : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+          };
+          return (
+            <div
+              className="mb-6 rounded-xl border border-primary/40 p-4 text-center animate-pulse transition-opacity duration-500"
+              style={{ background: "var(--gradient-hero)", boxShadow: "var(--shadow-glow)" }}
+            >
+              <div className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
+                <Sparkles className="h-4 w-4" /> ¡Evento activo!
+              </div>
+              <p className="mt-1 text-base font-semibold">
+                {activeEvent.event_name ?? "Evento especial"} — Las horas valen{" "}
+                <span className="text-primary">x{activeEvent.multiplier}</span> más
+              </p>
+              {remainMs != null ? (
+                <div className="mt-2 inline-block rounded-md border border-primary/30 bg-background/60 px-3 py-1 font-mono text-lg font-bold tabular-nums text-primary">
+                  ⏳ {fmt(remainMs)}
+                </div>
+              ) : (
+                <div className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Evento Activo
+                </div>
+              )}
             </div>
-            <p className="mt-1 text-base font-semibold">
-              {activeEvent.event_name ?? "Evento especial"} — Las horas valen{" "}
-              <span className="text-primary">x{activeEvent.multiplier}</span> más
-            </p>
-          </div>
-        )}
+          );
+        })()}
+
 
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="grid w-full grid-cols-2">

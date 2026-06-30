@@ -81,6 +81,7 @@ export type Database = {
         Row: {
           active: boolean
           event_name: string | null
+          expires_at: string | null
           id: string
           key: string
           multiplier: number
@@ -89,6 +90,7 @@ export type Database = {
         Insert: {
           active?: boolean
           event_name?: string | null
+          expires_at?: string | null
           id?: string
           key: string
           multiplier?: number
@@ -97,6 +99,7 @@ export type Database = {
         Update: {
           active?: boolean
           event_name?: string | null
+          expires_at?: string | null
           id?: string
           key?: string
           multiplier?: number
