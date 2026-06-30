@@ -180,13 +180,31 @@ function Index() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Live event banner — poll every 15s
+  // Live event banner — poll every 5s; auto-tick local clock every 1s for countdown
   useEffect(() => {
     const load = () => getActiveMultiplier().then(setActiveEvent);
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
+
+  // Ticker dedicado al countdown del evento (1s) — corre solo si hay expires_at
+  const [eventNow, setEventNow] = useState(Date.now());
+  useEffect(() => {
+    if (!activeEvent.active || !activeEvent.expires_at) return;
+    const t = setInterval(() => setEventNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [activeEvent.active, activeEvent.expires_at]);
+
+  // Si el evento expiró localmente, refrescar inmediatamente
+  useEffect(() => {
+    if (!activeEvent.active || !activeEvent.expires_at) return;
+    const remaining = new Date(activeEvent.expires_at).getTime() - eventNow;
+    if (remaining <= 0) {
+      getActiveMultiplier().then(setActiveEvent);
+    }
+  }, [eventNow, activeEvent.active, activeEvent.expires_at]);
+
 
   const isAllowed = ip === ALLOWED_IP;
   const activeSessionRef = useRef<Session | null>(null);
