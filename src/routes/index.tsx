@@ -375,10 +375,30 @@ function Index() {
     }
     localStorage.setItem(STORAGE_KEY, name);
     setBusy(true);
+
+    // 1) Sanitización: cerrar TODAS las sesiones huérfanas abiertas de este usuario (0 min)
+    const { data: orphans } = await supabase
+      .from("sessions")
+      .select("id,start_time,last_seen")
+      .eq("user_name", name)
+      .is("end_time", null);
+    if (orphans && orphans.length > 0) {
+      await Promise.all(
+        orphans.map((o) =>
+          supabase
+            .from("sessions")
+            .update({ end_time: o.start_time, total_minutes: 0, last_seen: o.start_time })
+            .eq("id", o.id)
+            .is("end_time", null)
+        )
+      );
+    }
+
+    // 2) Nueva sesión con start_time = ahora (UTC) — contador arranca en 00:00:00
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("sessions")
-      .insert({ user_name: name, last_seen: nowIso })
+      .insert({ user_name: name, start_time: nowIso, last_seen: nowIso })
       .select()
       .single();
     setBusy(false);
