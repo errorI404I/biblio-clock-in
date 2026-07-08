@@ -265,35 +265,47 @@ function Index() {
 
   const checkActiveSession = useCallback(async (name: string) => {
     if (!name) return;
-    const { data } = await supabase
+    const { data: openRows } = await supabase
       .from("sessions")
       .select("*")
       .eq("user_name", name)
       .is("end_time", null)
-      .order("start_time", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data) {
+      .order("start_time", { ascending: false });
+    if (!openRows || openRows.length === 0) {
       setActiveSession(null);
       return;
     }
-    const lastSeenMs = data.last_seen
-      ? new Date(data.last_seen).getTime()
-      : new Date(data.start_time).getTime();
     const staleAfter = HEARTBEAT_MS + OFFLINE_GRACE_MS + 30_000;
-    if (Date.now() - lastSeenMs > staleAfter) {
-      const minutes = await closeSessionAt(
-        data.id,
-        data.start_time,
-        new Date(lastSeenMs).toISOString()
-      );
-      toast.message(`Sesión previa recuperada: ${minutes} min registrados.`);
+    const nowMs = Date.now();
+    let restored: Session | null = null;
+    for (const row of openRows) {
+      const lastSeenMs = row.last_seen
+        ? new Date(row.last_seen).getTime()
+        : new Date(row.start_time).getTime();
+      const isFresh = !restored && (nowMs - lastSeenMs) <= staleAfter;
+      if (isFresh) {
+        restored = row as Session;
+        continue;
+      }
+      // Sesión huérfana: cerrar con last_seen si es válido, sino descartar (0 min)
+      const stalePenalty = nowMs - lastSeenMs > staleAfter;
+      if (stalePenalty && row.last_seen) {
+        await closeSessionAt(row.id, row.start_time, row.last_seen);
+      } else {
+        await supabase
+          .from("sessions")
+          .update({ end_time: row.start_time, total_minutes: 0, last_seen: row.start_time })
+          .eq("id", row.id)
+          .is("end_time", null);
+      }
+    }
+    if (restored) {
+      setActiveSession(restored);
+      setLastVerified(new Date(restored.last_seen ?? restored.start_time).getTime());
+    } else {
       setActiveSession(null);
       loadLeaders();
-      return;
     }
-    setActiveSession(data);
-    setLastVerified(lastSeenMs);
   }, [loadLeaders]);
 
   // Restore active session when name available
@@ -363,10 +375,30 @@ function Index() {
     }
     localStorage.setItem(STORAGE_KEY, name);
     setBusy(true);
+
+    // 1) Sanitización: cerrar TODAS las sesiones huérfanas abiertas de este usuario (0 min)
+    const { data: orphans } = await supabase
+      .from("sessions")
+      .select("id,start_time,last_seen")
+      .eq("user_name", name)
+      .is("end_time", null);
+    if (orphans && orphans.length > 0) {
+      await Promise.all(
+        orphans.map((o) =>
+          supabase
+            .from("sessions")
+            .update({ end_time: o.start_time, total_minutes: 0, last_seen: o.start_time })
+            .eq("id", o.id)
+            .is("end_time", null)
+        )
+      );
+    }
+
+    // 2) Nueva sesión con start_time = ahora (UTC) — contador arranca en 00:00:00
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("sessions")
-      .insert({ user_name: name, last_seen: nowIso })
+      .insert({ user_name: name, start_time: nowIso, last_seen: nowIso })
       .select()
       .single();
     setBusy(false);
