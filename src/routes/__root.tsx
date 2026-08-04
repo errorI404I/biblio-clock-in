@@ -80,6 +80,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Horas Biblio" },
       { name: "twitter:description", content: "Registro de tiempo de conexión Wi-Fi" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/aef43d5c-c881-45b3-98af-dc12ed99b6aa/id-preview-816ece04--34c24eee-ca4a-408a-95ef-c0b8f7a13e0f.lovable.app-1785812996711.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/aef43d5c-c881-45b3-98af-dc12ed99b6aa/id-preview-816ece04--34c24eee-ca4a-408a-95ef-c0b8f7a13e0f.lovable.app-1785812996711.png" },
     ],
     links: [
       {
