@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles, Archive } from "lucide-react";
+import { Wifi, WifiOff, LogIn, LogOut, Trophy, Loader2, Sparkles, Archive, Flame } from "lucide-react";
 import { PastRankingsPublic } from "@/components/PastRankings";
 
 import { toast } from "sonner";
@@ -161,7 +161,9 @@ function Index() {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
-  const [leaders, setLeaders] = useState<{ user_name: string; minutes: number; online: boolean }[]>([]);
+  const [leaders, setLeaders] = useState<
+    { user_name: string; minutes: number; online: boolean; streak: number }[]
+  >([]);
   const [onlyOnline, setOnlyOnline] = useState(false);
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
@@ -246,24 +248,56 @@ function Index() {
   const loadLeaders = useCallback(async () => {
     const { data } = await supabase
       .from("sessions")
-      .select("user_name,total_minutes,end_time");
+      .select("user_name,total_minutes,end_time,start_time");
     if (!data) return;
     const minutesMap = new Map<string, number>();
     const onlineSet = new Set<string>();
+    const daysMap = new Map<string, Set<string>>();
+    // Día calendario en Argentina (UTC-3)
+    const dayKey = (iso: string) => {
+      const d = new Date(new Date(iso).getTime() - 3 * 3600 * 1000);
+      return d.toISOString().slice(0, 10);
+    };
     for (const r of data) {
       if (r.total_minutes != null) {
         minutesMap.set(r.user_name, (minutesMap.get(r.user_name) ?? 0) + (r.total_minutes ?? 0));
       }
       if (r.end_time === null) onlineSet.add(r.user_name);
+      if (r.start_time && (r.total_minutes ?? 0) > 0) {
+        const set = daysMap.get(r.user_name) ?? new Set<string>();
+        set.add(dayKey(r.start_time));
+        daysMap.set(r.user_name, set);
+      }
     }
+    const todayKey = dayKey(new Date().toISOString());
+    const shiftDay = (key: string, delta: number) => {
+      const d = new Date(`${key}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + delta);
+      return d.toISOString().slice(0, 10);
+    };
+    const streakOf = (name: string) => {
+      const set = daysMap.get(name);
+      if (!set || set.size === 0) return 0;
+      // La racha sigue viva si registró hoy o ayer
+      let cursor = set.has(todayKey) ? todayKey : shiftDay(todayKey, -1);
+      if (!set.has(cursor)) return 0;
+      let streak = 0;
+      while (set.has(cursor)) {
+        streak += 1;
+        cursor = shiftDay(cursor, -1);
+      }
+      return streak;
+    };
     const names = new Set<string>([...minutesMap.keys(), ...onlineSet]);
     const arr = Array.from(names, (user_name) => ({
       user_name,
       minutes: minutesMap.get(user_name) ?? 0,
       online: onlineSet.has(user_name),
+      streak: streakOf(user_name),
     })).sort((a, b) => b.minutes - a.minutes);
     setLeaders(arr);
   }, []);
+
 
   const checkActiveSession = useCallback(async (name: string) => {
     if (!name) return;
@@ -877,6 +911,15 @@ function Index() {
                                 className="h-3 w-3 rounded-full bg-muted-foreground/40"
                                 title="Desconectado"
                               />
+                            )}
+                            {l.streak > 0 && (
+                              <span
+                                className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-xs font-semibold text-orange-400"
+                                title={`Racha de ${l.streak} día${l.streak === 1 ? "" : "s"} seguidos`}
+                              >
+                                <Flame className="h-3 w-3" />
+                                {l.streak}
+                              </span>
                             )}
                           </div>
                           <span className="font-mono tabular-nums text-sm">
