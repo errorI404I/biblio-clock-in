@@ -912,6 +912,15 @@ function Index() {
                                 title="Desconectado"
                               />
                             )}
+                            {l.streak > 0 && (
+                              <span
+                                className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-xs font-semibold text-orange-400"
+                                title={`Racha de ${l.streak} día${l.streak === 1 ? "" : "s"} seguidos`}
+                              >
+                                <Flame className="h-3 w-3" />
+                                {l.streak}
+                              </span>
+                            )}
                           </div>
                           <span className="font-mono tabular-nums text-sm">
                             {h}h {String(m).padStart(2, "0")}m
