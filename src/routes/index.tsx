@@ -161,7 +161,9 @@ function Index() {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
-  const [leaders, setLeaders] = useState<{ user_name: string; minutes: number; online: boolean }[]>([]);
+  const [leaders, setLeaders] = useState<
+    { user_name: string; minutes: number; online: boolean; streak: number }[]
+  >([]);
   const [onlyOnline, setOnlyOnline] = useState(false);
   const [lastVerified, setLastVerified] = useState<number | null>(null);
   const [verifiedFlash, setVerifiedFlash] = useState(false);
